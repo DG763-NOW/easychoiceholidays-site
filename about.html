@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About Us — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount" style="height:38vh;min-height:240px;">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <div class="box" id="about-box" style="display:none;">
+    <h2>Our Story</h2>
+    <div id="about-intro"></div>
+  </div>
+  <div class="box" id="about-empty" style="display:none;">
+    <p class="section-note">This tenant hasn't added an About Us page yet.</p>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('about.html');
+  bg.renderFooter();
+
+  // About Us content (intro text + gallery) is CMS-managed — one per
+  // tenant, edited in the CMS's About Us editor — rather than hardcoded
+  // in this file, so the website is purely a presentation layer: every
+  // page's content lives in one place (the CMS), not duplicated here.
+  //
+  // The hero slider cycles the About Us gallery's own photos (opts.
+  // plainPhotos — no title/CTA overlay), not property listings like every
+  // other page's slider. 29/08/2026 direction: "About Us page is more
+  // personalised, less marketing" — property cards belong on the pages
+  // selling a stay, not here — and the separate Gallery box below the
+  // intro was dropped since the slider now IS that gallery; a photo no
+  // longer needs to appear twice on the same page.
+  bg.api.about()
+    .then((about) => {
+      const hasIntro = about.about_intro && about.about_intro.trim();
+      const hasPhotos = about.photos && about.photos.length > 0;
+
+      if (hasPhotos) {
+        bg.initHeroSlider('hero-slider-mount', about.photos, { plainPhotos: true });
+      } else {
+        document.getElementById('hero-slider-mount').style.display = 'none';
+      }
+
+      if (hasIntro) {
+        document.getElementById('about-intro').innerHTML = bg.paragraphsHtml(about.about_intro);
+        document.getElementById('about-box').style.display = 'block';
+      }
+      if (!hasIntro && !hasPhotos) {
+        document.getElementById('about-empty').style.display = 'block';
+      }
+    })
+    .catch(() => {
+      document.getElementById('hero-slider-mount').style.display = 'none';
+      document.getElementById('about-empty').style.display = 'block';
+    });
+</script>
+</body>
+</html>

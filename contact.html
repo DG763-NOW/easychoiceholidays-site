@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;" id="contact-form-box">
+    <h2>Get in touch</h2>
+    <p class="section-note" id="contact-context-note">
+      Have a question about a property or a booking? Send us a message and
+      we'll get back to you.
+    </p>
+    <form id="contact-form">
+      <div class="row-2">
+        <div class="field"><label>Name</label><input type="text" id="c-name" required></div>
+        <div class="field"><label>Email</label><input type="email" id="c-email" required></div>
+      </div>
+      <div class="field"><label>Phone (optional)</label><input type="tel" id="c-phone" maxlength="40" autocomplete="tel"></div>
+      <div class="field"><label>Property (optional)</label><input type="text" id="c-property" placeholder="e.g. Casa Mirador"></div>
+      <div class="field"><label>Message</label><textarea id="c-message" required></textarea></div>
+      <p class="section-note" id="contact-error" style="display:none;color:#D14343;font-weight:700;"></p>
+      <button class="btn btn-cta" type="submit" id="contact-submit-btn">Send Message</button>
+    </form>
+  </div>
+
+  <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;text-align:center;display:none;" id="contact-success-box">
+    <h2 style="color:#2F9E63;">Message sent, we'll be in touch soon!</h2>
+    <p class="section-note">Thanks for reaching out — a copy has also been sent to your own email address.</p>
+    <div class="cta-row" style="display:flex;gap:10px;justify-content:center;margin-top:18px;">
+      <a class="btn btn-secondary" href="search.html">Search</a>
+      <a class="btn btn-secondary" id="return-to-property-cta" href="#" style="display:none;">Return to property</a>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('contact.html');
+  bg.renderFooter();
+  // Full slider, same as Home — see search.html's matching comment
+  // (29/08/2026: dropped `minimal: true` everywhere for consistency).
+  bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
+
+  // Arriving from a Property page's "Contact Us" button carries the
+  // listing along (see property.html) so the message can be tied to the
+  // right property server-side, and so a successful send can offer
+  // "Return to property" rather than only "Search".
+  const qs = new URLSearchParams(location.search);
+  const listingId = qs.get('listing_id') || '';
+  const listingTitle = qs.get('title') || '';
+  if (listingTitle) {
+    document.getElementById('c-property').value = listingTitle;
+    document.getElementById('contact-context-note').textContent =
+      `Have a question about ${listingTitle} or a booking? Send us a message and we'll get back to you.`;
+  }
+  if (listingId) {
+    const returnBtn = document.getElementById('return-to-property-cta');
+    returnBtn.href = 'property.html?id=' + encodeURIComponent(listingId);
+    returnBtn.style.display = 'inline-block';
+  }
+
+  // Arriving from a successful "Check availability" on the Property page
+  // carries the checked dates (and price, when one resolved) along too —
+  // prefill the message with them so the visitor doesn't have to retype
+  // what they just checked (30/08/2026 report: "copy the dates and
+  // availability in to the Contact Message"). Only ever set when both
+  // dates are present and look like real ISO dates — a stray/malformed
+  // query string just leaves the message blank as before.
+  const startDate = qs.get('start_date') || '';
+  const endDate = qs.get('end_date') || '';
+  const totalPrice = qs.get('total_price');
+  const isIsoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if (isIsoDate(startDate) && isIsoDate(endDate)) {
+    const dateRange = bg.fmtDateRange(startDate, endDate);
+    const costPhrase = totalPrice != null && totalPrice !== '' && !Number.isNaN(Number(totalPrice))
+      ? ` (checked as available, approx. ${bg.fmtMoney(Number(totalPrice))} total)`
+      : ' (checked as available)';
+    document.getElementById('c-message').value =
+      `I'd like to request ${dateRange}${costPhrase}${listingTitle ? ' for ' + listingTitle : ''}. Please let me know how to proceed.`;
+  }
+
+  // Real send via the CMS's public enquiries endpoint (Resend under the
+  // hood — see _lib/routes/enquiries.ts). Previously this only opened a
+  // mailto: link with nothing actually sent until the visitor's own email
+  // app took over; now the message is delivered directly and the visitor
+  // gets a real confirmation screen instead of being dropped into another
+  // app entirely.
+  document.getElementById('contact-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('c-name').value.trim();
+    const email = document.getElementById('c-email').value.trim();
+    const property = document.getElementById('c-property').value.trim();
+    const phone = document.getElementById('c-phone').value.trim();
+    let message = document.getElementById('c-message').value.trim();
+    // Only verified listing context (a real listing_id) is trusted by the
+    // backend to name the property in the notification — a free-typed
+    // property name with no matching id is folded into the message text
+    // instead, so that context isn't silently lost.
+    if (property && !listingId) {
+      message = `Property: ${property}\n\n${message}`;
+    }
+
+    const btn = document.getElementById('contact-submit-btn');
+    const errorEl = document.getElementById('contact-error');
+    errorEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    try {
+      await bg.api.submitEnquiry({ name, email, phone: phone || undefined, message, listing_id: listingId || undefined });
+      document.getElementById('contact-form-box').style.display = 'none';
+      document.getElementById('contact-success-box').style.display = 'block';
+      document.getElementById('contact-success-box').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      errorEl.textContent = err.message || 'Could not send your message right now — please try again.';
+      errorEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send Message';
+    }
+  });
+</script>
+</body>
+</html>

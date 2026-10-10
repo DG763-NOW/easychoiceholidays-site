@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booking Request — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <!-- Reached from a Property page after a successful "Check availability"
+       (booking-request.html?listing_id=&title=&start_date=&end_date=&total_price=).
+       Without those, there is nothing to book — see #br-missing. -->
+  <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;display:none;" id="br-missing">
+    <h2>Choose your dates first</h2>
+    <p class="section-note">To make a booking request, pick a property, check its availability for your dates, and then choose <strong>Booking Request</strong>.</p>
+    <div class="cta-row" style="display:flex;gap:10px;margin-top:14px;">
+      <a class="btn btn-cta" href="search.html">Search Properties</a>
+      <a class="btn btn-secondary" href="contact.html">Contact Us</a>
+    </div>
+  </div>
+
+  <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;display:none;" id="br-form-box">
+    <h2>Booking Request</h2>
+    <p class="section-note">
+      Send us your details and we'll hold these dates for you while we confirm.
+      Nothing is booked until you receive a confirmation email from us.
+    </p>
+
+    <div id="br-summary" style="border:1px solid var(--border, #E4E7EC);border-radius:10px;padding:14px 16px;margin:14px 0 18px;">
+      <div style="display:grid;grid-template-columns:110px 1fr;gap:6px 12px;">
+        <div class="section-note" style="margin:0;">Property</div><div id="br-property" style="font-weight:700;"></div>
+        <div class="section-note" style="margin:0;">Dates</div><div id="br-dates" style="font-weight:700;"></div>
+        <div class="section-note" style="margin:0;">Total</div><div id="br-total" style="font-weight:700;"></div>
+      </div>
+      <!-- Full cost breakdown, filled in from a fresh quote when the page loads. -->
+      <div id="br-breakdown"></div>
+    </div>
+
+    <form id="br-form">
+      <div class="row-2">
+        <div class="field"><label>Name</label><input type="text" id="br-name" maxlength="120" required autocomplete="name"></div>
+        <div class="field"><label>Email</label><input type="email" id="br-email" maxlength="200" required autocomplete="email"></div>
+      </div>
+      <div class="row-2" style="grid-template-columns:minmax(140px,1fr) 2fr;">
+        <div class="field"><label>Country code</label><select id="br-phone-country" required autocomplete="tel-country-code"></select></div>
+        <div class="field"><label>Telephone number</label><input type="tel" id="br-phone" maxlength="30" required autocomplete="tel-national" placeholder="e.g. 600 123 456"></div>
+      </div>
+      <div class="row-3">
+        <div class="field"><label>Adults</label><input type="number" id="br-adults" min="1" max="100" step="1" value="2" required inputmode="numeric"></div>
+        <div class="field"><label>Children under 18</label><input type="number" id="br-children" min="0" max="100" step="1" value="0" required inputmode="numeric"></div>
+        <div class="field"><label>Total guests</label><input type="number" id="br-total-guests" value="2" readonly tabindex="-1" style="background:#F4F5F7;"></div>
+      </div>
+      <p class="section-note" id="br-guest-warning" style="display:none;color:#D14343;font-weight:700;margin-top:-6px;"></p>
+      <div class="field">
+        <label>Preferred language</label>
+        <select id="br-language" required>
+          <option value="EN">English</option>
+          <option value="ES">Español (Spanish)</option>
+          <option value="DE">Deutsch (German)</option>
+          <option value="FR">Français (French)</option>
+          <option value="IT">Italiano (Italian)</option>
+        </select>
+        <p class="section-note" style="margin:5px 0 0;">The language we'll use for emails about your stay.</p>
+      </div>
+      <div class="field"><label>Anything we should know? (optional)</label><textarea id="br-message" maxlength="2000" placeholder="e.g. expected arrival time, special requests"></textarea></div>
+      <!-- Honeypot: hidden from people, often filled in by bots. -->
+      <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
+        <label>Website <input type="text" id="br-website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <!-- Optional marketing consent (10/10/2026): never pre-ticked, separate
+           from the booking itself; the exact wording shown is stored with it. -->
+      <div class="field-check">
+        <input type="checkbox" id="br-marketing">
+        <div>
+          <label for="br-marketing">Do you agree to receive occasional updates from <span id="br-marketing-org" data-org-name></span>?</label>
+          <p class="section-note">Optional. You can change your mind at any time by contacting us.</p>
+        </div>
+      </div>
+      <p class="section-note" id="br-error" style="display:none;color:#D14343;font-weight:700;"></p>
+      <button class="btn btn-cta" type="submit" id="br-submit-btn">Send Booking Request</button>
+      <p class="section-note" style="margin:14px 0 0;">Please note that your contact details will not be used for any purposes beyond booking your holiday, unless you have ticked the box above.</p>
+    </form>
+  </div>
+
+  <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;text-align:center;display:none;" id="br-success-box">
+    <h2 style="color:#2F9E63;">Booking request sent, thank you!</h2>
+    <p class="section-note" id="br-success-note">We'll be in touch soon to confirm your dates.</p>
+    <div class="cta-row" style="display:flex;gap:10px;justify-content:center;margin-top:18px;">
+      <a class="btn btn-secondary" href="search.html">Search</a>
+      <a class="btn btn-secondary" id="br-return-cta" href="#">Return to property</a>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('booking-request.html');
+  bg.renderFooter();
+  document.getElementById('br-marketing-org').textContent = bg.orgName();
+  bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
+
+  const qs = new URLSearchParams(location.search);
+  const listingId = qs.get('listing_id') || '';
+  const listingTitle = qs.get('title') || '';
+  const startDate = qs.get('start_date') || '';
+  const endDate = qs.get('end_date') || '';
+  const totalPrice = qs.get('total_price');
+  const isIsoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+  const returnBtn = document.getElementById('br-return-cta');
+  if (listingId) returnBtn.href = 'property.html?id=' + encodeURIComponent(listingId);
+  else returnBtn.style.display = 'none';
+
+  if (!listingId || !isIsoDate(startDate) || !isIsoDate(endDate) || endDate <= startDate) {
+    document.getElementById('br-missing').style.display = 'block';
+  } else {
+    document.getElementById('br-form-box').style.display = 'block';
+    document.getElementById('br-property').textContent = listingTitle || 'Selected property';
+    document.getElementById('br-dates').textContent = bg.fmtDateRange(startDate, endDate);
+    const totalOk = totalPrice != null && totalPrice !== '' && !Number.isNaN(Number(totalPrice));
+    document.getElementById('br-total').textContent = totalOk ? bg.fmtMoney(Number(totalPrice)) : 'Calculated on sending';
+
+    // Fresh quote for the itemised breakdown (the URL only carries the
+    // total). If it fails the form still works — the server re-quotes on send.
+    bg.api.quote(listingId, startDate, endDate)
+      .then((q) => {
+        if (q && q.available === false) {
+          showError('Sorry, those dates are no longer available. Please go back and choose different dates.');
+          return;
+        }
+        if (q && q.breakdown) {
+          document.getElementById('br-total').textContent = bg.fmtMoney(q.breakdown.total);
+          document.getElementById('br-breakdown').innerHTML = bg.costBreakdownHtml(q);
+        }
+      })
+      .catch(() => {});
+  }
+
+  // ---- country codes ------------------------------------------------
+  // [ISO-2, name, dial code]. Dial code digits are what the server stores.
+  const COUNTRIES = [
+    ['AD','Andorra','376'],['AR','Argentina','54'],['AU','Australia','61'],['AT','Austria','43'],['BE','Belgium','32'],
+    ['BR','Brazil','55'],['BG','Bulgaria','359'],['CA','Canada','1'],['CL','Chile','56'],['CN','China','86'],
+    ['CO','Colombia','57'],['HR','Croatia','385'],['CY','Cyprus','357'],['CZ','Czechia','420'],['DK','Denmark','45'],
+    ['EE','Estonia','372'],['FI','Finland','358'],['FR','France','33'],['DE','Germany','49'],['GI','Gibraltar','350'],
+    ['GR','Greece','30'],['HU','Hungary','36'],['IS','Iceland','354'],['IN','India','91'],['IE','Ireland','353'],
+    ['IL','Israel','972'],['IT','Italy','39'],['JP','Japan','81'],['LV','Latvia','371'],['LT','Lithuania','370'],
+    ['LU','Luxembourg','352'],['MT','Malta','356'],['MX','Mexico','52'],['MC','Monaco','377'],['MA','Morocco','212'],
+    ['NL','Netherlands','31'],['NZ','New Zealand','64'],['NO','Norway','47'],['PL','Poland','48'],['PT','Portugal','351'],
+    ['RO','Romania','40'],['SA','Saudi Arabia','966'],['RS','Serbia','381'],['SG','Singapore','65'],['SK','Slovakia','421'],
+    ['SI','Slovenia','386'],['ZA','South Africa','27'],['KR','South Korea','82'],['ES','Spain','34'],['SE','Sweden','46'],
+    ['CH','Switzerland','41'],['TR','Türkiye','90'],['UA','Ukraine','380'],['AE','United Arab Emirates','971'],
+    ['GB','United Kingdom','44'],['US','United States','1'],['UY','Uruguay','598'],
+  ];
+  (function initPhoneCountry() {
+    const sel = document.getElementById('br-phone-country');
+    sel.innerHTML = COUNTRIES.map((c) => '<option value="' + c[2] + '" data-iso="' + c[0] + '">' + bg.escapeHtml(c[1]) + ' (+' + c[2] + ')</option>').join('');
+    // Pre-select from the browser's region (e.g. en-GB -> United Kingdom),
+    // falling back to Spain.
+    const region = ((navigator.language || '').split('-')[1] || '').toUpperCase();
+    const match = COUNTRIES.find((c) => c[0] === region) || COUNTRIES.find((c) => c[0] === 'ES');
+    const opt = Array.from(sel.options).find((o) => o.dataset.iso === match[0]);
+    if (opt) sel.value = opt.value;
+    // Pre-select the language likewise.
+    const lang = (navigator.language || 'en').slice(0, 2).toUpperCase();
+    const langSel = document.getElementById('br-language');
+    if (Array.from(langSel.options).some((o) => o.value === lang)) langSel.value = lang;
+  })();
+
+  // ---- guests ---------------------------------------------------------
+  // Total = adults + children, checked against the property's own maximum
+  // (set per property in the CMS; none = no limit).
+  let maxGuests = null;
+  const adultsEl = document.getElementById('br-adults');
+  const childrenEl = document.getElementById('br-children');
+  const totalGuestsEl = document.getElementById('br-total-guests');
+  const guestWarningEl = document.getElementById('br-guest-warning');
+  const submitBtnEl = document.getElementById('br-submit-btn');
+  function readCount(el) {
+    const n = parseInt(el.value, 10);
+    return Number.isNaN(n) || n < 0 ? 0 : n;
+  }
+  function updateGuests() {
+    const total = readCount(adultsEl) + readCount(childrenEl);
+    totalGuestsEl.value = total;
+    if (maxGuests != null && total > maxGuests) {
+      guestWarningEl.textContent = 'This property sleeps a maximum of ' + maxGuests + ' guest' + (maxGuests === 1 ? '' : 's')
+        + '. Please reduce the number of guests, or contact us to discuss.';
+      guestWarningEl.style.display = 'block';
+      submitBtnEl.disabled = true;
+    } else {
+      guestWarningEl.style.display = 'none';
+      submitBtnEl.disabled = false;
+    }
+  }
+  adultsEl.addEventListener('input', updateGuests);
+  childrenEl.addEventListener('input', updateGuests);
+  if (listingId) {
+    bg.api.listing(listingId)
+      .then((l) => { maxGuests = l && l.max_guests != null ? l.max_guests : null; updateGuests(); })
+      .catch(() => {});
+  }
+
+  function showError(msg) {
+    const errorEl = document.getElementById('br-error');
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+  }
+
+  // The price shown above is only what the Property page quoted a moment
+  // ago — the server re-checks availability and recalculates it, and the
+  // confirmation below shows the figure it actually used.
+  document.getElementById('br-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('br-submit-btn');
+    const errorEl = document.getElementById('br-error');
+    errorEl.style.display = 'none';
+    if (readCount(adultsEl) < 1) { showError('Please enter at least 1 adult.'); return; }
+    if (maxGuests != null && readCount(adultsEl) + readCount(childrenEl) > maxGuests) { updateGuests(); return; }
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const res = await bg.api.submitBookingRequest({
+        listing_id: listingId,
+        start_date: startDate,
+        end_date: endDate,
+        guest_name: document.getElementById('br-name').value.trim(),
+        guest_email: document.getElementById('br-email').value.trim(),
+        guest_phone_country: document.getElementById('br-phone-country').value,
+        guest_phone: document.getElementById('br-phone').value.trim(),
+        adults: readCount(adultsEl),
+        children: readCount(childrenEl),
+        language: document.getElementById('br-language').value,
+        message: document.getElementById('br-message').value.trim() || undefined,
+        marketing_consent: document.getElementById('br-marketing').checked,
+        marketing_consent_text: document.getElementById('br-marketing').checked
+          ? document.querySelector('label[for="br-marketing"]').textContent.trim() : undefined,
+        website: document.getElementById('br-website').value,
+      });
+      const b = res.booking || {};
+      if (b.total_price != null) {
+        document.getElementById('br-success-note').textContent =
+          'We have your request for ' + bg.fmtDateRange(startDate, endDate) + ' (' + bg.fmtMoney(Number(b.total_price)) + ' in total). '
+          + 'A copy has been emailed to you, and we\'ll be in touch soon to confirm.';
+      }
+      document.getElementById('br-form-box').style.display = 'none';
+      document.getElementById('br-success-box').style.display = 'block';
+      document.getElementById('br-success-box').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      showError(err.message || 'Could not send your request right now — please try again.');
+      btn.textContent = 'Send Booking Request';
+      updateGuests();
+    }
+  });
+</script>
+</body>
+</html>

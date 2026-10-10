@@ -1,0 +1,450 @@
+/* Blue Gecko CMS — public website shared styles.
+   Palette and fonts match the CMS's own admin tool (see
+   public/tenant/login.html's :root) per the template's Website Style
+   Guide: "same fonts as golfgardensmiraflores.es" (approximated here with
+   the CMS's own established pairing, since the reference site's actual
+   font-family declarations aren't inspectable from outside), dark-blue
+   header/footer, plain-white body, thin rounded-corner boxed sections,
+   light-blue CTAs. */
+
+:root {
+  --petrol: #081B5D;
+  --petrol-hover: #06154A;
+  /* Header/footer background only — deliberately its own variable rather
+     than reusing --petrol directly (03/09/2026). --petrol also colours
+     links, CTA text, price text and the active filter-tab state across the
+     rest of the site; David's request was specifically "the chosen colour
+     should be the header and footer," matching the same colour bar the
+     branded emails already use, not a full site-wide recolour of buttons
+     and links to a tenant colour that might not read well there. Defaults
+     to --petrol so an unbranded tenant looks unchanged; renderHeader() in
+     site.js overrides this one variable (not --petrol) once the tenant's
+     accent colour comes back from GET /public/:slug/branding. */
+  --header-footer-bg: var(--petrol);
+  --gecko-blue: #CFD9FA;
+  --gecko-blue-hover: #B7C6F5;
+  --bg: #FFFFFF;
+  --surface: #F6F8F9;
+  --border: #E3E9EC;
+  --text: #16323F;
+  --text-muted: #64798A;
+  --text-faint: #94A6B0;
+  --warn: #B4790C;
+  --warn-bg: #FBF1DD;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(8, 27, 93, 0.06), 0 8px 28px rgba(8, 27, 93, 0.08);
+  --max-width: 1180px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Public Sans', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+h1, h2, h3 { font-family: 'Archivo', Arial, sans-serif; margin: 0 0 12px; line-height: 1.2; }
+h1 { font-size: 30px; }
+h2 { font-size: 22px; }
+h3 { font-size: 17px; }
+p { margin: 0 0 12px; }
+a { color: var(--petrol); }
+img { max-width: 100%; display: block; }
+
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 20px; }
+
+/* ---- Header ------------------------------------------------------- */
+.site-header {
+  background: var(--header-footer-bg);
+  color: #fff;
+}
+.site-header .bar {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.site-header .brand {
+  color: #fff;
+  text-decoration: none;
+  font-family: 'Archivo', Arial, sans-serif;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Only present when config.js sets LOGO_URL — most tenant sites are
+   text-only (see renderHeader in site.js). */
+.site-header .brand-logo { height: 30px; width: auto; display: block; }
+.site-header nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.site-header nav a {
+  color: #EAF0FF;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.site-header nav a:hover { background: rgba(255,255,255,0.1); }
+.site-header nav a.active { background: rgba(255,255,255,0.16); color: #fff; }
+
+/* ---- Footer --------------------------------------------------------*/
+.site-footer {
+  background: var(--header-footer-bg);
+  color: #C9D3EE;
+  margin-top: 60px;
+}
+.site-footer .bar {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 22px 20px;
+  text-align: left;
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.footer-copy { padding-top: 3px; }
+.footer-trustpilot { padding-top: 3px; display: flex; align-items: center; }
+.footer-trustpilot a {
+  color: #C9D3EE;
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(201,211,238,0.5);
+}
+.footer-trustpilot a:hover { color: #fff; border-bottom-color: #fff; }
+/* A badge image (optional, 03/09/2026) replaces the plain text link — no
+   underline-style border on that variant, and the link box shouldn't
+   carry extra inline-content line-height around the image. */
+.footer-trustpilot a:has(.trustpilot-badge) { border-bottom: none; line-height: 0; }
+.trustpilot-badge { height: 40px; width: auto; display: block; }
+.trustpilot-badge:hover { opacity: 0.85; }
+.footer-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.footer-links a {
+  color: #C9D3EE;
+  text-decoration: none;
+  font-weight: 600;
+}
+.footer-links a:hover { color: #fff; text-decoration: underline; }
+
+/* ---- Buttons -------------------------------------------------------*/
+.btn {
+  display: inline-block;
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.btn-cta { background: var(--gecko-blue); color: var(--petrol); }
+.btn-cta:hover { background: var(--gecko-blue-hover); }
+.btn-outline { background: transparent; color: #fff; border-color: rgba(255,255,255,0.55); }
+.btn-outline:hover { background: rgba(255,255,255,0.1); }
+.btn-secondary { background: #fff; color: var(--petrol); border-color: var(--border); }
+.btn-secondary:hover { border-color: var(--petrol); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Boxed sections --------------------------------------------------
+   "Simple thin line boxes with round corners to delimit each section" */
+.box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin: 24px 0;
+  background: #fff;
+}
+.box + .box { margin-top: 24px; }
+
+/* ---- Hero / cycling slider ------------------------------------------*/
+.hero-slider {
+  position: relative;
+  height: 62vh;
+  min-height: 380px;
+  max-height: 620px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+}
+.hero-slide.active { opacity: 1; }
+.hero-slide .scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(8,27,93,0) 40%, rgba(8,27,93,0.75) 100%);
+}
+.hero-slide .info {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  padding: 32px 20px;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+/* Standalone so it reads the same whether it's floating over a hero
+   slide's dark scrim or sitting on a plain white box (Overview, the
+   Special Offer text box) — a filled amber pill with white text holds up
+   against both. */
+.offer-flag {
+  display: inline-block;
+  background: var(--warn);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.special-offer-box {
+  border: 2px solid var(--warn);
+  background: #FFFBF2;
+}
+.special-offer-box #so-dates { margin: 4px 0 12px; }
+.special-offer-box #so-text { margin: 0 0 14px; white-space: pre-line; }
+.hero-slide .title { font-family: 'Archivo', Arial, sans-serif; font-size: 28px; font-weight: 800; margin: 0 0 4px; }
+.hero-slide .subtitle { font-size: 14px; color: #DCE4FF; margin: 0 0 14px; }
+.hero-slide .desc { max-width: 640px; font-size: 14px; color: #EDF1FF; margin: 0 0 16px; }
+.hero-slide .cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); }
+
+.hero-caption-fallback {
+  background: linear-gradient(135deg, var(--petrol), #142a7a);
+}
+
+/* ---- Home page hero (image/video, 05/09/2026 addition) --------------
+   Shown once, ahead of the .hero-slide carousel above, inside the same
+   #hero-slider-mount container — see bg.initHomeHero() in site.js. Never
+   coexists with .hero-slide markup in the DOM; initHomeHero() fades this
+   out and initHeroSlider() then replaces the mount's contents entirely,
+   so no z-index stacking between the two is needed. */
+.home-hero {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+.home-hero.hero-fade-out { opacity: 0; }
+.home-hero .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,27,93,0) 40%, rgba(8,27,93,0.75) 100%); }
+.home-hero-video-wrap { position: absolute; inset: 0; }
+.home-hero-video-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+.home-hero .info { position: relative; z-index: 1; color: #fff; padding: 32px 20px; max-width: var(--max-width); margin: 0 auto; width: 100%; }
+.home-hero .title { font-family: 'Archivo', Arial, sans-serif; font-size: 32px; font-weight: 800; margin: 0 0 8px; text-wrap: balance; }
+.home-hero .subtitle { font-size: 15px; color: #DCE4FF; margin: 0 0 16px; max-width: 640px; }
+.home-hero .cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.home-hero-mute-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.55);
+  background: rgba(8,27,93,0.55);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.home-hero-mute-btn:hover { background: rgba(8,27,93,0.8); }
+
+/* Per-property hero video's "Skip" control (06/09/2026, updated 07/09/2026) —
+   the Home hero's own Skip is a button inside its .info/.cta-row overlay,
+   but the listing hero's .info/.cta-row now holds only the "Check Dates"
+   CTA (see initListingHero() in site.js), so Skip stays its own small
+   standalone pill next to the mute button rather than sharing that row.
+   08/09/2026: video-only now — Image Hero Mode no longer shows any splash
+   or Skip control at all, so the .solo (no-mute-button) variant this used
+   to need for Image mode is gone too. */
+.home-hero-skip-btn {
+  position: absolute;
+  top: 16px;
+  right: 66px;
+  z-index: 2;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.55);
+  background: rgba(8,27,93,0.55);
+  color: #fff;
+  font-family: 'Public Sans', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.home-hero-skip-btn:hover { background: rgba(8,27,93,0.8); }
+
+/* ---- Property / result cards ------------------------------------- */
+.card-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin: 20px 0; }
+.p-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.p-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.p-card .thumb { aspect-ratio: 4/3; background: var(--surface); position: relative; }
+.p-card .thumb .offer-badge {
+  position: absolute; top: 10px; left: 10px;
+  background: var(--warn); color: #fff; font-size: 11px; font-weight: 800;
+  text-transform: uppercase; padding: 4px 8px; border-radius: 6px;
+}
+.p-card .body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.p-card .p-title { font-family: 'Archivo', Arial, sans-serif; font-weight: 700; font-size: 15.5px; }
+.p-card .p-meta { font-size: 12.5px; color: var(--text-muted); }
+.p-card .p-desc { font-size: 13px; color: var(--text-muted); flex: 1; }
+.p-card .p-price { font-family: 'Archivo', Arial, sans-serif; font-weight: 800; color: var(--petrol); font-size: 15px; }
+
+/* Search result rows — cover left, description right, per the template */
+.result-row {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+  text-decoration: none;
+  color: var(--text);
+}
+.result-row .thumb { background: var(--surface); min-height: 170px; position: relative; }
+.result-row .thumb .offer-badge { position: absolute; top: 10px; left: 10px; background: var(--warn); color: #fff; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 4px 8px; border-radius: 6px; }
+.result-row .body { padding: 16px 18px 16px 0; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 640px) {
+  .result-row { grid-template-columns: 1fr; }
+  .result-row .body { padding: 0 16px 16px; }
+}
+
+.no-photo {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #E7ECFB, var(--surface));
+  color: var(--text-faint);
+  font-family: 'Archivo', Arial, sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ---- Amenity chips -------------------------------------------------*/
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12.5px; color: var(--text); }
+
+/* ---- Forms (search filters, contact) --------------------------------*/
+.filter-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-tabs button {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--text-muted); cursor: pointer;
+}
+.filter-tabs button.active { background: var(--petrol); color: #fff; border-color: var(--petrol); }
+.filter-panel { display: none; }
+.filter-panel.active { display: block; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; color: var(--text); background: #fff;
+}
+.field textarea { min-height: 110px; resize: vertical; }
+.field-check { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 16px; }
+.field-check input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--brand, #1a73e8); }
+.field-check label { display: block; margin: 0; font-size: 14px; font-weight: 400; color: var(--text, inherit); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.field-check .section-note { margin: 3px 0 0; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 640px) { .row-2, .row-3 { grid-template-columns: 1fr; } }
+.stepper { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.stepper button { border: none; background: var(--surface); width: 26px; height: 26px; border-radius: 6px; font-weight: 800; cursor: pointer; color: var(--petrol); }
+.sort-row { display: flex; gap: 10px; align-items: center; margin: 16px 0; font-size: 13px; color: var(--text-muted); }
+.sort-row select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+
+/* ---- Gallery ---------------------------------------------------------*/
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.gallery-grid img, .gallery-grid .no-photo { aspect-ratio: 1; border-radius: 8px; object-fit: cover; }
+/* 31/08/2026 — Gallery-only room/area caption (galleryGridHtml's
+   opts.showRoomNames). A .gallery-item wraps one image so the caption
+   sits above it while the grid still sizes/aligns exactly like a bare
+   <img> would; a photo with no room assigned renders with no label. */
+.gallery-item { display: flex; flex-direction: column; gap: 4px; }
+.gallery-item-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.room-block { margin-bottom: 26px; }
+.room-block h3 { margin-bottom: 8px; }
+.lightbox {
+  position: fixed; inset: 0; background: rgba(8,27,93,0.92); z-index: 100;
+  display: none; align-items: center; justify-content: center; padding: 30px;
+}
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 92vw; max-height: 86vh; border-radius: 8px; }
+.lightbox .close { position: absolute; top: 20px; right: 26px; color: #fff; font-size: 30px; cursor: pointer; background: none; border: none; }
+.lightbox .nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 52px; height: 52px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 30px; line-height: 1;
+  cursor: pointer; display: none; align-items: center; justify-content: center;
+}
+.lightbox .nav:hover { background: rgba(255,255,255,0.26); }
+.lightbox .nav.prev { left: 20px; }
+.lightbox .nav.next { right: 20px; }
+.lightbox .lightbox-count {
+  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+  color: #fff; font-size: 14px; font-weight: 600; background: rgba(0,0,0,0.35);
+  padding: 4px 12px; border-radius: 999px; display: none;
+}
+@media (max-width: 640px) {
+  .lightbox .nav { width: 42px; height: 42px; font-size: 24px; }
+  .lightbox .nav.prev { left: 8px; }
+  .lightbox .nav.next { right: 8px; }
+}
+
+/* ---- Location map ----------------------------------------------------*/
+#location-map { height: 340px; border-radius: 8px; }
+.location-note { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* ---- Misc ------------------------------------------------------------*/
+.section-note { color: var(--text-muted); font-size: 13.5px; }
+.home-subheading { font-size: 16px; font-weight: 600; color: var(--text-muted); margin-top: -6px; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+.loading { text-align: center; padding: 40px 20px; color: var(--text-faint); }
+.next-property-row { display: flex; justify-content: center; margin: 30px 0; }
+.bottom-cta-row { display: flex; gap: 12px; justify-content: center; margin: 40px 0 10px; }
+.calendar-note { background: var(--surface); border-radius: var(--radius); padding: 18px; font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }

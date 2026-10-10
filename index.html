@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading properties…</div>
+</section>
+
+<div class="container">
+  <div class="box" id="home-content-box" style="display:none;">
+    <h2 id="home-headline"></h2>
+    <p class="home-subheading" id="home-subheading" style="display:none;"></p>
+    <div id="home-body"></div>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('index.html');
+  bg.renderFooter();
+
+  // Hero (image/video, 05/09/2026 addition) and the property carousel
+  // share one fetch each, run in parallel — the hero needs the listings
+  // ready to show the moment it swaps away, and the carousel needs to be
+  // ready to show immediately when there's no hero configured at all.
+  // Each promise fails independently (Promise.all with per-call .catch)
+  // so a Home-content hiccup never blocks the carousel, and vice versa.
+  Promise.all([
+    bg.api.listings({}).catch((err) => { console.error(err); return null; }),
+    bg.api.home().catch(() => ({})),
+  ]).then(([listings, home]) => {
+    function showCarousel() {
+      if (listings === null) {
+        document.getElementById('hero-slider-mount').innerHTML =
+          '<div class="hero-empty">Could not load properties right now.</div>';
+        return;
+      }
+      bg.initHeroSlider('hero-slider-mount', listings);
+    }
+    bg.initHomeHero('hero-slider-mount', home, showCarousel);
+
+    // Home page text block — headline / sub-heading / main body, all
+    // CMS-managed (edited from the tenant dashboard's "Edit Home Page"),
+    // same "website is a pure presentation layer" approach as About Us.
+    // Hidden entirely if the tenant hasn't filled any of it in yet. This
+    // is the plain box below the carousel — separate from the hero's own
+    // headline/sub-headline, which render overlaid on the hero itself.
+    const hasHeadline = home.home_headline && home.home_headline.trim();
+    const hasSubheading = home.home_subheading && home.home_subheading.trim();
+    const hasBody = home.home_body && home.home_body.trim();
+    if (!hasHeadline && !hasSubheading && !hasBody) return;
+
+    if (hasHeadline) document.getElementById('home-headline').textContent = home.home_headline;
+    else document.getElementById('home-headline').style.display = 'none';
+    if (hasSubheading) {
+      document.getElementById('home-subheading').textContent = home.home_subheading;
+      document.getElementById('home-subheading').style.display = 'block';
+    }
+    if (hasBody) document.getElementById('home-body').innerHTML = bg.paragraphsHtml(home.home_body);
+    document.getElementById('home-content-box').style.display = 'block';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <div class="box">
+    <div class="filter-tabs">
+      <button type="button" class="active" data-tab="headlines">Headlines</button>
+      <button type="button" data-tab="amenities">Amenities</button>
+      <button type="button" data-tab="dates">Dates</button>
+    </div>
+
+    <div class="filter-panel active" id="panel-headlines">
+      <div class="row-3">
+        <div class="field">
+          <label>Property Type</label>
+          <select id="f-property-type">
+            <option value="">Any</option>
+            <option value="villa">Villa</option>
+            <option value="apartment">Apartment</option>
+            <option value="townhouse">Townhouse</option>
+            <option value="studio">Studio</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Minimum Bedrooms</label>
+          <div class="stepper">
+            <button type="button" id="f-bedrooms-minus">−</button>
+            <span id="f-bedrooms-value">0</span>
+            <button type="button" id="f-bedrooms-plus">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Location</label>
+          <input type="text" id="f-region" placeholder="e.g. Mijas">
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-panel" id="panel-amenities">
+      <div class="chip-row" id="amenities-picker">
+        <span class="section-note">Loading amenities…</span>
+      </div>
+    </div>
+
+    <div class="filter-panel" id="panel-dates">
+      <div class="row-2">
+        <div class="field"><label>Check-in</label><input type="date" id="f-start"></div>
+        <div class="field"><label>Check-out</label><input type="date" id="f-end"></div>
+      </div>
+    </div>
+
+    <!-- Search messages (no matches, search failed) sit right under the
+         filters, just above the Search button (10/10/2026). -->
+    <p id="s-message" role="status" aria-live="polite" style="display:none;margin:2px 0 12px;font-weight:700;color:#D14343;"></p>
+    <div class="cta-row" style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn btn-cta" id="search-btn">Search</button>
+      <button class="btn btn-secondary" id="reset-btn">Reset</button>
+    </div>
+  </div>
+
+  <div class="sort-row" id="sort-row" style="display:none;">
+    <span id="results-count"></span>
+    <span style="flex:1;"></span>
+    <label for="sort-select">Sort by price</label>
+    <select id="sort-select">
+      <option value="">Default</option>
+      <option value="price_asc">Ascending</option>
+      <option value="price_desc">Descending</option>
+    </select>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="bottom-cta-row" id="end-cta-row" style="display:none;">
+    <button class="btn btn-secondary" id="end-search-btn">Search</button>
+    <button class="btn btn-secondary" id="end-reset-btn">Reset</button>
+    <a class="btn btn-secondary" href="index.html">Home</a>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('search.html');
+  bg.renderFooter();
+
+  // Full slider (title/description/CTA), same as the Home page — the
+  // template calls for "same slider view as home page" throughout the
+  // site; this page used to pass `minimal: true` (image + offer flag
+  // only), which read as a truncated, inconsistent version of the same
+  // component (29/08/2026 report).
+  bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
+
+  // ---- Tabs ---------------------------------------------------------
+  document.querySelectorAll('.filter-tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tabs button').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.filter-panel').forEach((p) => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ---- Dates filter ---------------------------------------------------
+  // Check-out must always be later than check-in (30/08/2026 report) —
+  // enforced via the check-out input's own `min`, same fix as Calendar and
+  // the Property page's own availability check.
+  const fStartEl = document.getElementById('f-start');
+  const fEndEl = document.getElementById('f-end');
+  function syncFEndMin() {
+    if (!fStartEl.value) return;
+    const dayAfterStart = bg.addDaysIso(fStartEl.value, 1);
+    fEndEl.min = dayAfterStart;
+    if (fEndEl.value && fEndEl.value <= fStartEl.value) fEndEl.value = dayAfterStart;
+  }
+  fStartEl.addEventListener('change', syncFEndMin);
+
+  // ---- Bedrooms stepper ----------------------------------------------
+  let bedroomsMin = 0;
+  document.getElementById('f-bedrooms-minus').addEventListener('click', () => {
+    bedroomsMin = Math.max(0, bedroomsMin - 1);
+    document.getElementById('f-bedrooms-value').textContent = bedroomsMin;
+  });
+  document.getElementById('f-bedrooms-plus').addEventListener('click', () => {
+    bedroomsMin += 1;
+    document.getElementById('f-bedrooms-value').textContent = bedroomsMin;
+  });
+
+  // ---- Amenities picker ------------------------------------------------
+  const selectedTags = new Set();
+  bg.api.tags().then((tags) => {
+    const el = document.getElementById('amenities-picker');
+    if (!tags || tags.length === 0) { el.innerHTML = '<span class="section-note">No amenities configured.</span>'; return; }
+    el.innerHTML = tags.map((t) =>
+      `<label class="chip" style="cursor:pointer;"><input type="checkbox" value="${bg.escapeHtml(t.slug)}" style="margin-right:6px;">${bg.escapeHtml(t.label)}</label>`
+    ).join('');
+    el.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedTags.add(cb.value); else selectedTags.delete(cb.value);
+      });
+    });
+  }).catch(() => {
+    document.getElementById('amenities-picker').innerHTML = '<span class="section-note">Could not load amenities.</span>';
+  });
+
+  // ---- Search / results -------------------------------------------------
+  let lastResults = [];
+
+  function showMessage(text) {
+    const m = document.getElementById('s-message');
+    m.textContent = text || '';
+    m.style.display = text ? 'block' : 'none';
+  }
+
+  function renderResults(results) {
+    lastResults = results;
+    // Persisted so property.html can offer a "Next Property" CTA that
+    // cycles through this same result set, wrapping to the first at the
+    // end — per the template's Search Page note.
+    sessionStorage.setItem('bg_search_context', JSON.stringify(results.map((r) => r.id)));
+
+    document.getElementById('sort-row').style.display = results.length ? 'flex' : 'none';
+    document.getElementById('results-count').textContent = results.length + (results.length === 1 ? ' property found' : ' properties found');
+    document.getElementById('end-cta-row').style.display = results.length ? 'flex' : 'none';
+
+    const el = document.getElementById('results');
+    el.innerHTML = results.length ? results.map(bg.resultRowHtml).join('') : '';
+    showMessage(results.length ? '' : 'No properties match those filters. Try broadening your search.');
+  }
+
+  function runSearch() {
+    const params = {
+      property_type: document.getElementById('f-property-type').value,
+      bedrooms_min: bedroomsMin || undefined,
+      region: document.getElementById('f-region').value.trim() || undefined,
+      tags: selectedTags.size ? [...selectedTags].join(',') : undefined,
+      start_date: document.getElementById('f-start').value || undefined,
+      end_date: document.getElementById('f-end').value || undefined,
+      sort: document.getElementById('sort-select').value || undefined,
+    };
+    showMessage('');
+    document.getElementById('results').innerHTML = '<div class="loading">Searching…</div>';
+    bg.api.listings(params).then(renderResults).catch(() => {
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('sort-row').style.display = 'none';
+      document.getElementById('end-cta-row').style.display = 'none';
+      showMessage('Search failed — please try again.');
+    });
+  }
+
+  function resetSearch() {
+    document.getElementById('f-property-type').value = '';
+    document.getElementById('f-region').value = '';
+    fStartEl.value = '';
+    fEndEl.value = '';
+    fEndEl.min = '';
+    document.getElementById('sort-select').value = '';
+    bedroomsMin = 0;
+    document.getElementById('f-bedrooms-value').textContent = '0';
+    selectedTags.clear();
+    document.querySelectorAll('#amenities-picker input[type=checkbox]').forEach((cb) => { cb.checked = false; });
+    runSearch();
+  }
+
+  document.getElementById('search-btn').addEventListener('click', runSearch);
+  document.getElementById('reset-btn').addEventListener('click', resetSearch);
+  document.getElementById('end-search-btn').addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  document.getElementById('end-reset-btn').addEventListener('click', resetSearch);
+  document.getElementById('sort-select').addEventListener('change', runSearch);
+
+  runSearch(); // initial, unfiltered — "every published listing"
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Blue Gecko CMS — public website (Easychoice Holidays tenant trial).
+#
+# This is a SEPARATE Netlify site from both the CMS's own and the
+# bluegeckotesting reference site — see the "Deploying" section in this
+# folder's README.md. Unlike those two (git-linked to
+# github.com/DG763-NOW/blue-gecko-cms with Netlify continuous deployment),
+# this folder lives outside that git repo entirely (moved 04/09/2026 to
+# Customers/easychoiceholidays, a sibling of the blue-gecko-cms checkout)
+# and deploys by hand via `netlify deploy` from inside this folder. This
+# file's `publish = "."` is what tells that CLI deploy to publish this
+# folder's own contents rather than looking for a Base directory setting —
+# there isn't one to set, since this was never imported from Git.
+#
+# Purely static — no functions here. Every page talks to the CMS's own
+# API (see assets/config.js's API_BASE) over plain cross-origin fetch
+# calls to the public, unauthenticated /v1/public/... endpoints
+# documented in the main repo's README.md.
+
+[build]
+  publish = "."

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <div class="box">
+    <p class="calendar-note" style="margin-bottom:16px;">
+      Enter your dates and search whether we can offer you a suitable property for that time.
+    </p>
+    <div class="row-2">
+      <div class="field"><label>Check-in</label><input type="date" id="c-start"></div>
+      <div class="field"><label>Check-out</label><input type="date" id="c-end"></div>
+    </div>
+    <!-- Search messages (nothing available, missing/invalid dates) sit right
+         under the date boxes, where the visitor is looking (10/10/2026). -->
+    <p id="c-message" role="status" aria-live="polite" style="display:none;margin:2px 0 12px;font-weight:700;color:#D14343;"></p>
+    <div class="cta-row" style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn btn-cta" id="search-btn">Search</button>
+      <button class="btn btn-secondary" id="reset-btn">Reset</button>
+    </div>
+  </div>
+
+  <div class="sort-row" id="sort-row" style="display:none;">
+    <span id="results-count"></span>
+    <span style="flex:1;"></span>
+    <label for="sort-select">Sort by price</label>
+    <select id="sort-select">
+      <option value="">Default</option>
+      <option value="price_asc">Ascending</option>
+      <option value="price_desc">Descending</option>
+    </select>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="bottom-cta-row" id="end-cta-row" style="display:none;">
+    <button class="btn btn-secondary" id="end-reset-btn">Search Again</button>
+    <a class="btn btn-secondary" href="index.html">Home</a>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('calendar.html');
+  bg.renderFooter();
+
+  // Full slider, same as Home — see search.html's matching comment
+  // (29/08/2026: dropped `minimal: true` everywhere for consistency).
+  bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
+
+  // Check-out must always be later than check-in (30/08/2026 report) —
+  // enforced via the check-out input's own `min`, not just caught after
+  // the fact on Search, so an invalid range can't be picked at all.
+  const cStartEl = document.getElementById('c-start');
+  const cEndEl = document.getElementById('c-end');
+  function syncCEndMin() {
+    if (!cStartEl.value) return;
+    const dayAfterStart = bg.addDaysIso(cStartEl.value, 1);
+    cEndEl.min = dayAfterStart;
+    if (cEndEl.value && cEndEl.value <= cStartEl.value) cEndEl.value = dayAfterStart;
+  }
+  cStartEl.addEventListener('change', syncCEndMin);
+
+  // The Calendar page IS the Search page's Dates filter, running alone —
+  // same results endpoint, same params, same rendering. See README's
+  // "Public website API" section, "How each website page maps to this".
+  function showMessage(text) {
+    const m = document.getElementById('c-message');
+    m.textContent = text || '';
+    m.style.display = text ? 'block' : 'none';
+  }
+
+  function renderResults(results) {
+    sessionStorage.setItem('bg_search_context', JSON.stringify(results.map((r) => r.id)));
+    document.getElementById('sort-row').style.display = results.length ? 'flex' : 'none';
+    document.getElementById('results-count').textContent = results.length + (results.length === 1 ? ' property available' : ' properties available');
+    document.getElementById('end-cta-row').style.display = results.length ? 'flex' : 'none';
+    const el = document.getElementById('results');
+    el.innerHTML = results.length ? results.map(bg.resultRowHtml).join('') : '';
+    showMessage(results.length ? '' : 'Nothing available for those dates — try a different range.');
+  }
+
+  function runSearch() {
+    const start = document.getElementById('c-start').value;
+    const end = document.getElementById('c-end').value;
+    if (!start || !end) { clearResults(); showMessage('Choose both a check-in and check-out date.'); return; }
+    if (end <= start) { clearResults(); showMessage('Check-out must be after check-in.'); return; }
+    showMessage('');
+    document.getElementById('results').innerHTML = '<div class="loading">Searching…</div>';
+    bg.api.listings({ start_date: start, end_date: end, sort: document.getElementById('sort-select').value || undefined })
+      .then(renderResults)
+      .catch(() => { clearResults(); showMessage('Search failed — please try again.'); });
+  }
+
+  // Empty the result list and hide the sort bar / bottom buttons, so a
+  // message under the date boxes isn't shown above stale results.
+  function clearResults() {
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('sort-row').style.display = 'none';
+    document.getElementById('end-cta-row').style.display = 'none';
+  }
+
+  document.getElementById('search-btn').addEventListener('click', runSearch);
+  document.getElementById('sort-select').addEventListener('change', runSearch);
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    cStartEl.value = '';
+    cEndEl.value = '';
+    cEndEl.min = '';
+    clearResults();
+    showMessage('');
+  });
+  document.getElementById('end-reset-btn').addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+</script>
+</body>
+</html>

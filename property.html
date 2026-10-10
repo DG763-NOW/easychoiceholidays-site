@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Property — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<div id="property-root">
+  <section class="hero-slider" id="cover-hero">
+    <div class="hero-empty">Loading…</div>
+  </section>
+
+  <div class="container" id="property-body" style="display:none;">
+
+    <div class="next-property-row" id="next-property-row" style="display:none;">
+      <a class="btn btn-secondary" id="next-property-btn" href="#">Next Property →</a>
+    </div>
+
+    <div class="box special-offer-box" id="special-offer-box" style="display:none;">
+      <div class="offer-flag" id="so-headline">Special Offer</div>
+      <p id="so-dates" class="section-note"></p>
+      <p id="so-text" style="display:none;"></p>
+      <a class="btn btn-cta special-offer-dates-link" href="#calendar">Special Offer Dates</a>
+    </div>
+
+    <div class="box" id="overview-box">
+      <span class="offer-flag" id="ov-offer-flag" style="display:none;">Special Offer</span>
+      <h2 id="ov-title"></h2>
+      <p id="ov-description"></p>
+      <p class="section-note" id="ov-tourist-licence" style="display:none;"></p>
+      <div class="chip-row" id="ov-amenities"></div>
+      <div class="cta-row" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="btn btn-cta" href="#calendar">Check Dates</a>
+        <a class="btn btn-secondary contact-us-link" href="contact.html">Contact Us</a>
+        <a class="btn btn-secondary special-offer-dates-link" href="#calendar" style="display:none;">Special Offer Dates</a>
+      </div>
+    </div>
+
+    <div class="box" id="mini-gallery-box">
+      <h2>Gallery</h2>
+      <div id="mini-gallery"></div>
+      <p style="margin-top:14px;">
+        <a class="btn btn-secondary" href="#full-gallery" id="see-full-gallery-btn">See Full Gallery</a>
+      </p>
+    </div>
+
+    <div class="box" id="full-gallery-box" style="display:none;">
+      <h2 id="full-gallery-anchor">Full Gallery</h2>
+      <div id="full-gallery"></div>
+      <p style="margin-top:14px;">
+        <a class="btn btn-secondary" href="#overview-box" id="return-to-property-btn">Return to property</a>
+      </p>
+    </div>
+
+    <div id="rooms-container"></div>
+
+    <div class="box" id="location-box">
+      <h2>Location</h2>
+      <div id="location-map"></div>
+      <p class="location-note">Shown area is approximate — for guest privacy, the exact address is only shared after a confirmed booking.</p>
+    </div>
+
+    <div class="box" id="calendar" style="scroll-margin-top:20px;">
+      <h2>Check Dates</h2>
+      <p class="section-note" id="cal-restriction-note" style="display:none;"></p>
+      <div class="row-2">
+        <div class="field"><label>Check-in</label><input type="date" id="cal-start"></div>
+        <div class="field"><label>Check-out</label><input type="date" id="cal-end"></div>
+      </div>
+      <button class="btn btn-cta" id="cal-check-btn">Check availability</button>
+      <div id="cal-result" style="margin-top:14px;"></div>
+      <div class="cta-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+        <a class="btn btn-cta booking-request-link" id="booking-request-cta" href="booking-request.html" style="display:none;">Booking Request</a>
+        <a class="btn btn-secondary contact-us-link" href="contact.html">Contact Us</a>
+      </div>
+    </div>
+
+    <div class="bottom-cta-row">
+      <a class="btn btn-secondary" href="index.html">Home</a>
+      <a class="btn btn-secondary" href="search.html">Search</a>
+    </div>
+  </div>
+
+  <div class="loading" id="property-loading">Loading property…</div>
+  <div class="empty-state" id="property-not-found" style="display:none;">
+    Property not found. <a href="search.html">Back to Search</a>
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+  bg.renderHeader('');
+  bg.renderFooter();
+
+  const listingId = new URLSearchParams(location.search).get('id');
+
+  function amenityChips(amenities) {
+    if (!amenities || amenities.length === 0) return '';
+    return amenities.map((a) => `<span class="chip">${bg.escapeHtml(a.label)}</span>`).join('');
+  }
+
+  function roomBlockHtml(room) {
+    return `
+      <div class="box room-block">
+        <h3>${bg.escapeHtml(room.name)}</h3>
+        ${room.description ? `<p>${bg.escapeHtml(room.description)}</p>` : ''}
+        ${bg.galleryGridHtml(room.photos)}
+      </div>`;
+  }
+
+  if (!listingId) {
+    document.getElementById('property-loading').style.display = 'none';
+    document.getElementById('property-not-found').style.display = 'block';
+    document.getElementById('cover-hero').style.display = 'none';
+  } else {
+    bg.api.listing(listingId)
+      .then((l) => {
+        document.getElementById('property-loading').style.display = 'none';
+        document.getElementById('property-body').style.display = 'block';
+        document.title = l.title + ' — Easychoice Holidays';
+
+        // Cover / hero (06/09/2026, db/034_listing_hero.sql; revised
+        // 07/09/2026 per DG feedback) — a plain, continuously cycling
+        // carousel of this property's own gallery photos, optionally
+        // preceded by a video intro (Video Hero Mode only — see
+        // bg.initListingHero(), which hands off at its configured
+        // duration/natural end/Skip). Every listing has an implicit hero
+        // image (the override, or its own first gallery photo) even when
+        // the tenant has never touched the Property Hero card. Previously
+        // this swapped to a single static image that then sat there
+        // forever, and re-showed the generic multi-listing CTA row ("Find
+        // Out More") pointing a property's own page back at itself — both
+        // fixed here: the carousel below cycles this listing's own photos
+        // via the ordinary >1-slide rotation initHeroSlider() already has,
+        // and `propertyPage: true` swaps that CTA row for a single "Check
+        // Dates" link to this same page's own #calendar box.
+        //
+        // 08/09/2026 (DG clarification) — the carousel's lead slide is the
+        // *effective hero image*, not necessarily the gallery's own first
+        // photo: if a Hero Image override has been uploaded, it replaces
+        // the gallery's lead photo in the carousel (shown instead of it,
+        // not in addition to it) — regardless of Hero Mode, so a Video
+        // hero hands off to that same override image, never to the
+        // gallery's original lead shot. With no override, this is
+        // unchanged: the property's own first gallery photo leads, same as
+        // always. The video itself never appears in the carousel — it's
+        // the full page's intro only.
+        //
+        // 08/09/2026 (DG report) — Image Hero Mode no longer gets any
+        // separate intro splash first: a fixed-5s "hero image" screen with
+        // its own redundant Skip button just duplicated this same carousel
+        // a moment later. bg.initListingHero() now hands off immediately
+        // when there's no video configured, so for Image mode the very
+        // first thing shown IS this carousel, already leading with the
+        // effective hero image above, then the rest of the gallery in
+        // order — one sequence, not two. Video mode is unchanged: video,
+        // then this carousel (hero image first, then gallery).
+        const restGalleryUrls = (l.photos || []).map((p) => p.url);
+        const galleryPhotoUrls = l.hero_image_url
+          ? [l.hero_image_url, ...restGalleryUrls.slice(1)]
+          : (restGalleryUrls.length > 0 ? restGalleryUrls : (l.cover_photo_url ? [l.cover_photo_url] : []));
+        const gallerySlides = (galleryPhotoUrls.length > 0 ? galleryPhotoUrls : [null])
+          .map((url) => Object.assign({}, l, { cover_photo_url: url }));
+        function showGalleryCarousel() { bg.initHeroSlider('cover-hero', gallerySlides, { propertyPage: true }); }
+        bg.initListingHero('cover-hero', l, showGalleryCarousel);
+
+        // "Next Property" — only shown when arriving from a Search (or
+        // Calendar) results list, per the template's Search Page note.
+        // The result order is stashed in sessionStorage by search.html;
+        // it persists across navigation in the same tab, so this page
+        // doesn't need it passed via the URL. Wraps to the first result
+        // at the end of the list.
+        try {
+          const ctx = JSON.parse(sessionStorage.getItem('bg_search_context') || '[]');
+          const idx = ctx.indexOf(listingId);
+          if (idx !== -1 && ctx.length > 1) {
+            const nextId = ctx[(idx + 1) % ctx.length];
+            document.getElementById('next-property-btn').href = 'property.html?id=' + encodeURIComponent(nextId);
+            document.getElementById('next-property-row').style.display = 'flex';
+          }
+        } catch (e) { /* no search context — fine, just no Next Property CTA */ }
+
+        // Every "Contact Us" link on this page carries the property along
+        // so contact.html can name it in the message and offer a "Return
+        // to property" CTA after sending — not just a bare link to a
+        // generic form.
+        const contactUrl = 'contact.html?listing_id=' + encodeURIComponent(listingId) + '&title=' + encodeURIComponent(l.title);
+        document.querySelectorAll('.contact-us-link').forEach((el) => { el.href = contactUrl; });
+
+        // Overview
+        document.getElementById('ov-title').textContent = l.title + (l.region_tag ? ' — ' + l.region_tag : '') + (l.urn ? ' (' + l.urn + ')' : '');
+        document.getElementById('ov-description').textContent = l.description || '';
+        // Mandatory tourist accommodation registration line (30/08/2026) —
+        // shown under the main text whenever the tenant has set one on
+        // this listing; hidden entirely otherwise. The CMS stores only the
+        // code, so the fixed label is built here rather than stored.
+        if (l.tourist_licence_number && l.tourist_licence_number.trim()) {
+          const licenceEl = document.getElementById('ov-tourist-licence');
+          licenceEl.textContent = 'Registered tourist accommodation · Andalucía ' + l.tourist_licence_number.trim();
+          licenceEl.style.display = 'block';
+        }
+        document.getElementById('ov-amenities').innerHTML = amenityChips(l.amenities);
+
+        // Arrival/departure day restrictions (03/09/2026) — a persistent
+        // hint under "Check Dates", visible before the visitor even
+        // searches, not just an error after an invalid pick.
+        const restrictionNote = bg.arrivalDepartureNote(l.allowed_arrival_days, l.allowed_departure_days);
+        if (restrictionNote) {
+          const noteEl = document.getElementById('cal-restriction-note');
+          noteEl.textContent = restrictionNote;
+          noteEl.style.display = 'block';
+        }
+
+        // Special Offer — the badge/box only appeared on pages fed by the
+        // search or special-offers endpoints before (29/08/2026 report:
+        // "banner is missing from the property page, now only visible on
+        // the Special Offer main slider"), because this page's own single-
+        // listing call never carried an is_special_offer_active flag to
+        // key off. Shown in two places per that report: a persistent
+        // banner in the Introduction box (doesn't disappear once the hero
+        // slide's own overlay would), and a dedicated box under the hero
+        // with the tenant's own per-property explanation text, when set.
+        if (l.special_offer) {
+          document.getElementById('ov-offer-flag').style.display = 'inline-block';
+          document.querySelectorAll('.special-offer-dates-link').forEach((el) => { el.style.display = ''; });
+
+          const offerBox = document.getElementById('special-offer-box');
+          const headline = l.special_offer.headline || 'Special Offer';
+          document.getElementById('so-headline').textContent = headline;
+          document.getElementById('so-dates').textContent = 'Valid ' + bg.fmtDateRange(l.special_offer.start_date, l.special_offer.end_date)
+            + (l.special_offer.price != null ? ' — from ' + bg.fmtPrice(l.special_offer.price) : '');
+          if (l.special_offer_text && l.special_offer_text.trim()) {
+            const textEl = document.getElementById('so-text');
+            textEl.textContent = l.special_offer_text;
+            textEl.style.display = 'block';
+          }
+          offerBox.style.display = 'block';
+
+          // "Special Offer Dates" — per the template request, takes the
+          // visitor straight to the Calendar box with both the offer's
+          // start AND end date pre-filled, ready to check availability
+          // immediately. Previously this only set check-in, leaving
+          // check-out free to be set to anything (including a date before
+          // check-in) — the check-out input's `min` is only kept in sync
+          // by syncCalEndMin(), which runs on check-in's own 'change'
+          // event; setting check-in's .value directly here, as this
+          // handler always has, never fires that event, so the min never
+          // updated and an out-of-range check-out silently produced
+          // "Check-out must be after check-in" (30/08/2026 report). Now
+          // sets both dates AND calls syncCalEndMin() explicitly so the
+          // constraint is applied regardless of how check-in was set.
+          // (calStartEl/calEndEl/syncCalEndMin are declared further down
+          // this same callback, but this click handler only ever runs
+          // later, once a visitor clicks — by then they're initialized.)
+          document.querySelectorAll('.special-offer-dates-link').forEach((el) => {
+            el.addEventListener('click', (e) => {
+              e.preventDefault();
+              calStartEl.value = l.special_offer.start_date;
+              calEndEl.value = l.special_offer.end_date;
+              syncCalEndMin();
+              document.getElementById('calendar').scrollIntoView({ behavior: 'smooth' });
+              calEndEl.focus();
+            });
+          });
+        }
+
+        // Mini gallery — first image per room. room_name is attached here
+        // (not stored on the photo itself) so galleryGridHtml's
+        // showRoomNames option can caption each thumbnail with which
+        // room/area it's from (31/08/2026) — the flat "first photo per
+        // room" list otherwise gives no visual indication of that.
+        const minis = (l.rooms || [])
+          .map((r) => (r.photos && r.photos[0] ? { ...r.photos[0], room_name: r.name } : null))
+          .filter(Boolean);
+        document.getElementById('mini-gallery').innerHTML = bg.galleryGridHtml(minis, { showRoomNames: true });
+
+        // Full gallery — every photo, gallery order. Each photo already
+        // carries room_id from the API; map it to the room's name here
+        // (falls through to no caption for a photo not yet assigned to a
+        // room in the CMS).
+        const roomNameById = {};
+        (l.rooms || []).forEach((r) => { roomNameById[r.id] = r.name; });
+        const fullGalleryPhotos = (l.photos || []).map((p) => ({ ...p, room_name: p.room_id ? roomNameById[p.room_id] : undefined }));
+        document.getElementById('full-gallery').innerHTML = bg.galleryGridHtml(fullGalleryPhotos, { showRoomNames: true });
+
+        document.getElementById('see-full-gallery-btn').addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById('full-gallery-box').style.display = 'block';
+          document.getElementById('full-gallery-box').scrollIntoView({ behavior: 'smooth' });
+        });
+        document.getElementById('return-to-property-btn').addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById('full-gallery-box').style.display = 'none';
+          document.getElementById('overview-box').scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // Rooms, same order as the CMS
+        document.getElementById('rooms-container').innerHTML = (l.rooms || []).map(roomBlockHtml).join('');
+
+        // Wired once, after every gallery (mini, full, and every room's
+        // own) is in the DOM — wiring this any earlier (it used to run
+        // right after the full gallery, before rooms-container was even
+        // populated) silently left every room photo's lightbox dead: the
+        // click listeners only ever attach to .gallery-grid elements that
+        // already exist at the moment this runs.
+        bg.wireGalleryLightbox(document.getElementById('property-body'));
+
+        // Location
+        bg.renderLocationMap('location-map', l.location);
+
+        // Calendar / availability check
+        const calStartEl = document.getElementById('cal-start');
+        const calEndEl = document.getElementById('cal-end');
+
+        // Check-out must always be later than check-in (30/08/2026 report)
+        // — enforced up front via the date input's own `min`, not just
+        // caught after the fact on submit, so an invalid range can't be
+        // picked in the first place. Bumping check-out forward (rather
+        // than just clearing it) means picking an earlier check-in while a
+        // check-out is already set slides both forward together instead of
+        // silently wiping the visitor's second choice.
+        function syncCalEndMin() {
+          if (!calStartEl.value) return;
+          const dayAfterStart = bg.addDaysIso(calStartEl.value, 1);
+          calEndEl.min = dayAfterStart;
+          if (calEndEl.value && calEndEl.value <= calStartEl.value) calEndEl.value = dayAfterStart;
+        }
+        calStartEl.addEventListener('change', syncCalEndMin);
+        syncCalEndMin();
+
+        // Booking Request button (06/10/2026) — only shown after a
+        // successful availability check that resolved a price, and
+        // pointing at booking-request.html with the checked dates/price.
+        // Hidden again on any later check that doesn't qualify.
+        const bookingCtaEl = document.getElementById('booking-request-cta');
+        const bookingBaseUrl = 'booking-request.html?listing_id=' + encodeURIComponent(listingId) + '&title=' + encodeURIComponent(l.title);
+        function hideBookingCta() { bookingCtaEl.style.display = 'none'; }
+
+        document.getElementById('cal-check-btn').addEventListener('click', () => {
+          hideBookingCta();
+          const start = calStartEl.value;
+          const end = calEndEl.value;
+          const resultEl = document.getElementById('cal-result');
+          if (!start || !end) { resultEl.innerHTML = '<p class="section-note">Choose both a check-in and check-out date.</p>'; return; }
+          if (end <= start) { resultEl.innerHTML = '<p class="section-note">Check-out must be after check-in.</p>'; return; }
+          resultEl.innerHTML = '<p class="section-note">Checking…</p>';
+          bg.api.quote(listingId, start, end)
+            .then((quote) => {
+              if (!quote.available) {
+                resultEl.innerHTML = `<p style="color:#D14343;font-weight:700;">Not available for ${bg.fmtDateRange(start, end)} — try different dates.</p>`;
+                // Not this exact range — any stale dates/price from an
+                // earlier successful check no longer apply, so every
+                // Contact Us button on the page (including the plain one
+                // right below this result, not just an inline link inside
+                // it) goes back to carrying just the property.
+                document.querySelectorAll('.contact-us-link').forEach((el) => { el.href = contactUrl; });
+                return;
+              }
+              // Carry the checked dates (and the price, when one resolved)
+              // through to the Contact form so the visitor doesn't have to
+              // retype them and the enquiry arrives with real context
+              // (30/08/2026 report: "copy the dates and availability in to
+              // the Contact Message"). Updates EVERY .contact-us-link on
+              // the page, not just a link embedded in this message — the
+              // plain "Contact Us" button sitting right below this result
+              // is the more prominent, more likely-to-be-clicked control,
+              // and a visitor who clicks that instead of an inline text
+              // link inside the paragraph was previously getting a blank
+              // message with no dates at all (30/08/2026 report).
+              const availContactUrl = contactUrl
+                + '&start_date=' + encodeURIComponent(start)
+                + '&end_date=' + encodeURIComponent(end)
+                + (quote.total_price != null ? '&total_price=' + encodeURIComponent(quote.total_price) : '');
+              document.querySelectorAll('.contact-us-link').forEach((el) => { el.href = availContactUrl; });
+              // Total shown here is all-in (09/10/2026): accommodation after
+              // any weekly/monthly discount, plus the property's cleaning
+              // fee and other costs. The itemised table below explains it,
+              // including the discount (03/09/2026 request: explain the
+              // price as a weekly or monthly discount).
+              const costPhrase = quote.total_price != null
+                ? `this length of stay will cost you ${bg.fmtMoney(quote.total_price)} in total`
+                : 'contact us for a price on these dates';
+              const breakdownHtml = quote.total_price != null ? bg.costBreakdownHtml(quote) : '';
+              if (quote.total_price != null) {
+                // A price resolved, so a real booking request can be made
+                // (06/10/2026): link to the Booking Request page, which
+                // re-checks availability and price server-side.
+                const bookingUrl = bookingBaseUrl
+                  + '&start_date=' + encodeURIComponent(start)
+                  + '&end_date=' + encodeURIComponent(end)
+                  + '&total_price=' + encodeURIComponent(quote.total_price);
+                bookingCtaEl.href = bookingUrl;
+                bookingCtaEl.style.display = 'inline-block';
+                resultEl.innerHTML = `<p style="color:#2F9E63;font-weight:700;">Available for ${bg.fmtDateRange(start, end)}, ${costPhrase}. Please complete a <a href="${bookingUrl}">Booking Request</a> to reserve these dates.</p>${breakdownHtml}`;
+              } else {
+                // No price set for these dates — nothing to book against
+                // yet, so keep the original "contact us" route.
+                resultEl.innerHTML = `<p style="color:#2F9E63;font-weight:700;">Available for ${bg.fmtDateRange(start, end)}, ${costPhrase}. Please <a href="${availContactUrl}">contact us</a> to request these dates.</p>`;
+              }
+            })
+            .catch((err) => {
+              // The backend already returns a specific, customer-facing
+              // reason for a min/max-stay or arrival/departure-day
+              // rejection (see quote.ts) — showing it here (03/09/2026)
+              // replaces a blanket "Could not check availability right
+              // now." that previously discarded that message even when the
+              // request succeeded in reaching the server and simply said no.
+              // A genuine network failure (fetch itself throwing, not the
+              // server responding with an error) still falls back to the
+              // generic line — those browser-generated messages ("Failed to
+              // fetch", "NetworkError...") aren't something a guest should see.
+              const isNetworkFailure = !err || !err.message || /failed to fetch|network ?error|load failed/i.test(err.message);
+              resultEl.innerHTML = `<p class="section-note">${bg.escapeHtml(isNetworkFailure ? 'Could not check availability right now.' : err.message)}</p>`;
+            });
+        });
+      })
+      .catch(() => {
+        document.getElementById('property-loading').style.display = 'none';
+        document.getElementById('property-not-found').style.display = 'block';
+        // The hero slider's own "Loading…" placeholder only gets replaced
+        // by initHeroSlider() on the success path — on a 404 (bad id, or
+        // wrong tenant) it would otherwise sit there forever, so clear it
+        // explicitly here too.
+        document.getElementById('cover-hero').style.display = 'none';
+      });
+  }
+</script>
+</body>
+</html>

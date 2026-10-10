@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Special Offers — Easychoice Holidays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script>
+  // Applies the tenant's real accent colour before the header/footer
+  // paint, so the CSS default doesn't flash in first. Prefers whatever
+  // this browser already has cached for this tenant (see site.js's
+  // Branding cache section, 10/09/2026 — fixes the colour flashing on
+  // every page nav, not just first load) and falls back to config.js's
+  // static ACCENT_COLOR when there's no cache yet (e.g. first-ever visit).
+  (function () {
+    var accent = null;
+    try {
+      var cached = JSON.parse(localStorage.getItem('bg_branding_' + (window.BG_SITE && window.BG_SITE.SLUG)) || 'null');
+      if (cached && cached.accent_color) accent = cached.accent_color;
+    } catch (e) { /* localStorage unavailable — fall through to the static default */ }
+    if (!accent && window.BG_SITE && window.BG_SITE.ACCENT_COLOR) accent = window.BG_SITE.ACCENT_COLOR;
+    if (accent) document.documentElement.style.setProperty('--header-footer-bg', accent);
+  })();
+</script>
+</head>
+<body>
+<header class="site-header" id="site-header"></header>
+
+<section class="hero-slider" id="hero-slider-mount">
+  <div class="hero-empty">Loading…</div>
+</section>
+
+<div class="container">
+  <div class="box" id="special-offers-intro-box" style="display:none;">
+    <div id="special-offers-intro-body"></div>
+  </div>
+</div>
+
+<!-- 04/09/2026 addition: every Special Offer property listed below the
+     intro box, same result-row treatment as the Search page, not just
+     the slider above — David: "in addition to the slider, show all
+     Special Offer properties below the Introduction box, just like in
+     the Search results." -->
+<div class="container" id="offers-list-container" style="display:none;">
+  <div class="sort-row"><span id="offers-results-count"></span></div>
+  <div id="offers-results"></div>
+</div>
+
+<div class="container" id="empty-offers" style="display:none;">
+  <div class="empty-state">
+    No Special Offers running right now — check back soon, or <a href="search.html">browse all properties</a>.
+  </div>
+</div>
+
+<footer class="site-footer" id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+<script>
+  bg.renderHeader('special-offers.html');
+  bg.renderFooter();
+
+  bg.api.specialOffers()
+    .then((offers) => {
+      // The slider component works off listing objects; each offer's
+      // `listing` field is already that shape (see README's
+      // /special-offers response), with is_special_offer_active already
+      // true on every one of them — onlyOffers just means "don't also
+      // pull in the rest of the portfolio", it has nothing left to filter.
+      const listings = offers.map((o) => o.listing);
+      if (listings.length === 0) {
+        document.getElementById('hero-slider-mount').style.display = 'none';
+        document.getElementById('empty-offers').style.display = 'block';
+        return;
+      }
+      bg.initHeroSlider('hero-slider-mount', listings, { onlyOffers: true });
+
+      // Same listings the slider already has — no second API call.
+      // resultRowHtml/.result-row is the exact Search-page card treatment
+      // (cover left, description right), reused as-is for consistency.
+      document.getElementById('offers-results-count').textContent =
+        listings.length + (listings.length === 1 ? ' Special Offer property' : ' Special Offer properties');
+      document.getElementById('offers-results').innerHTML = listings.map(bg.resultRowHtml).join('');
+      document.getElementById('offers-list-container').style.display = 'block';
+    })
+    .catch(() => {
+      document.getElementById('hero-slider-mount').innerHTML = '<div class="hero-empty">Could not load Special Offers right now.</div>';
+    });
+
+  // Generic "how our Special Offers work" intro text — CMS-managed
+  // (edited from the tenant dashboard's "Edit Special Offers Page"),
+  // tenant-wide and separate from each property's own offer text. Shown
+  // beneath the slider regardless of whether any offer is currently
+  // running; hidden entirely if the tenant hasn't filled it in yet.
+  bg.api.specialOffersIntro()
+    .then((text) => {
+      if (!text || !text.trim()) return;
+      document.getElementById('special-offers-intro-body').innerHTML = bg.paragraphsHtml(text);
+      document.getElementById('special-offers-intro-box').style.display = 'block';
+    })
+    .catch(() => { /* no Special Offers page content yet — leave the section hidden */ });
+</script>
+</body>
+</html>
