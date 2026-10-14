@@ -1,3 +1,11 @@
+**Updated 13/10/2026 — deploys from Git now.** This folder is the private
+repo `DG763-NOW/easychoiceholidays-site`, and its Netlify site
+(`easychoiceholidays`) is linked to that repo: **a push to `main` deploys
+the live site.** No `netlify deploy` and no `.netlify` link are needed any
+more. The older notes below that mention the Netlify CLI are history. Push
+only what is meant to go live; to roll back, use "Publish deploy" on an
+earlier deploy in Netlify, or revert the commit and push.
+
 # Easychoice Holidays — public website
 
 **Updated 11/09/2026** — `assets/site.js` only, a follow-up to the
@@ -154,32 +162,28 @@ same branding fetch — see `assets/site.css`'s `--header-footer-bg`.
 
 ## Deploying
 
-This is its own Netlify site (`easychoiceholidays`), separate from the CMS
-and from `bluegeckotesting` — same underlying CMS backend, independent
-deploys. Unlike the CMS and `bluegeckotesting` (both git-linked to
-`github.com/DG763-NOW/blue-gecko-cms` with Netlify continuous deployment —
-the CMS builds from the repo root, `bluegeckotesting` from the repo's
-`website/` folder as its Base directory), this folder is **not** connected
-to git at all. Deploy it by hand from inside the folder:
+Since 13/10/2026 this is a Git-linked Netlify site (`easychoiceholidays`),
+built from the private repo `DG763-NOW/easychoiceholidays-site`, branch
+`main`, build command empty, publish directory `.` (see `netlify.toml`).
+Same CMS backend as `bluegeckotesting`, independent site.
 
 ```
-netlify deploy          # draft preview
-netlify deploy --prod   # live
+git add <files by name>
+git commit -m "..."
+git push            # Netlify deploys main automatically
 ```
 
-**If you ever move this folder again**: Netlify CLI's site link is keyed
-by this folder's absolute path, not by anything inside it. After a move,
-`netlify deploy` from the new location won't know it's linked to the
-`easychoiceholidays` site until you run `netlify link` again from there
-and pick the existing site from the list — never `netlify sites:create`,
-which would make a second, empty site instead of reconnecting this one.
-(This is exactly what caused the accidental-deploy-to-a-different-site
-incident during initial setup — see the main repo's session history if
-that needs re-explaining.)
+Then check the Deploys page in Netlify and the live site. Writing files to
+this folder is not a deploy; a push is. Claude never pushes.
+
+Before 13/10/2026 this folder was deployed by hand with the Netlify CLI
+(`netlify deploy`, then `--prod`). A missing `.netlify/state.json` once sent
+one of those deploys to an unrelated site; that risk no longer applies to a
+Git-linked site.
 
 No environment variables needed on this site — it has no functions, and
 the API base URL is a plain constant in `assets/config.js`, not a secret.
 
 Point a real domain at this site's Netlify URL whenever the trial turns
-into the tenant's real production site (same process as `bluegeckocms.com`
-/ `bluegeckotesting`'s own domains were connected).
+into the tenant's real production site (see the DNS playbook in the main
+repo's `docs/`).
