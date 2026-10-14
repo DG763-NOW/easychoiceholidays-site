@@ -1,3 +1,10 @@
+**Updated 14/10/2026 — favicon.** The square "e" icon from the Easychoice
+logo (`Blue_Gecko_CMS/Logos and Photos/easychoiceholidays.eu logo 27082026.png`)
+is now the site's favicon: `favicon.ico` (16/32/48) at the root, and
+`assets/favicon-32x32.png`, `assets/favicon-16x16.png` and
+`assets/apple-touch-icon.png` (180, white background), linked from every
+page's `<head>`. This replaces item 6 under "Before this goes live".
+
 **Updated 13/10/2026 — deploys from Git now.** This folder is the private
 repo `DG763-NOW/easychoiceholidays-site`, and its Netlify site
 (`easychoiceholidays`) is linked to that repo: **a push to `main` deploys
