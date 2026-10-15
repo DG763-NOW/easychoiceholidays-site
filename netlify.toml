@@ -13,3 +13,12 @@
 
 [build]
   publish = "."
+
+# Release B (docs/SECURITY.md #7): no other website may show these pages
+# inside a frame (clickjacking). X-Frame-Options covers older browsers,
+# frame-ancestors the current ones. This site never frames itself.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none'"

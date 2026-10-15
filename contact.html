@@ -52,6 +52,10 @@
       <div class="field"><label>Phone (optional)</label><input type="tel" id="c-phone" maxlength="40" autocomplete="tel"></div>
       <div class="field"><label>Property (optional)</label><input type="text" id="c-property" placeholder="e.g. Casa Mirador"></div>
       <div class="field"><label>Message</label><textarea id="c-message" required></textarea></div>
+      <!-- Honeypot: hidden from people, often filled in by bots. -->
+      <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
+        <label>Website <input type="text" id="c-website" tabindex="-1" autocomplete="off"></label>
+      </div>
       <p class="section-note" id="contact-error" style="display:none;color:#D14343;font-weight:700;"></p>
       <button class="btn btn-cta" type="submit" id="contact-submit-btn">Send Message</button>
     </form>
@@ -59,7 +63,7 @@
 
   <div class="box" style="max-width:640px;margin-left:auto;margin-right:auto;text-align:center;display:none;" id="contact-success-box">
     <h2 style="color:#2F9E63;">Message sent, we'll be in touch soon!</h2>
-    <p class="section-note">Thanks for reaching out — a copy has also been sent to your own email address.</p>
+    <p class="section-note">Thanks for reaching out — we have sent a short confirmation to your email address.</p>
     <div class="cta-row" style="display:flex;gap:10px;justify-content:center;margin-top:18px;">
       <a class="btn btn-secondary" href="search.html">Search</a>
       <a class="btn btn-secondary" id="return-to-property-cta" href="#" style="display:none;">Return to property</a>
@@ -143,7 +147,7 @@
     btn.textContent = 'Sending…';
 
     try {
-      await bg.api.submitEnquiry({ name, email, phone: phone || undefined, message, listing_id: listingId || undefined });
+      await bg.api.submitEnquiry({ name, email, phone: phone || undefined, message, listing_id: listingId || undefined, website: document.getElementById('c-website').value });
       document.getElementById('contact-form-box').style.display = 'none';
       document.getElementById('contact-success-box').style.display = 'block';
       document.getElementById('contact-success-box').scrollIntoView({ behavior: 'smooth' });
