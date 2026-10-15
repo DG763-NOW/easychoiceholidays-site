@@ -42,9 +42,11 @@
     <p class="calendar-note" style="margin-bottom:16px;">
       Enter your dates and search whether we can offer you a suitable property for that time.
     </p>
-    <div class="row-2">
-      <div class="field"><label>Check-in</label><input type="date" id="c-start"></div>
-      <div class="field"><label>Check-out</label><input type="date" id="c-end"></div>
+    <!-- Date picker (Release A, 14/10/2026): bg.initDateRange() adds the
+         Check-in / Check-out buttons and the calendar. -->
+    <div id="c-dates">
+      <input type="hidden" id="c-start">
+      <input type="hidden" id="c-end">
     </div>
     <!-- Search messages (nothing available, missing/invalid dates) sit right
          under the date boxes, where the visitor is looking (10/10/2026). -->
@@ -85,18 +87,10 @@
   // (29/08/2026: dropped `minimal: true` everywhere for consistency).
   bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
 
-  // Check-out must always be later than check-in (30/08/2026 report) —
-  // enforced via the check-out input's own `min`, not just caught after
-  // the fact on Search, so an invalid range can't be picked at all.
-  const cStartEl = document.getElementById('c-start');
-  const cEndEl = document.getElementById('c-end');
-  function syncCEndMin() {
-    if (!cStartEl.value) return;
-    const dayAfterStart = bg.addDaysIso(cStartEl.value, 1);
-    cEndEl.min = dayAfterStart;
-    if (cEndEl.value && cEndEl.value <= cStartEl.value) cEndEl.value = dayAfterStart;
-  }
-  cStartEl.addEventListener('change', syncCEndMin);
+  // Date picker (Release A, 14/10/2026). It only lets a visitor pick a
+  // check-out after the check-in, which replaces the old `min` rule
+  // (30/08/2026).
+  const cPicker = bg.initDateRange(document.getElementById('c-dates'), { startInput: 'c-start', endInput: 'c-end' });
 
   // The Calendar page IS the Search page's Dates filter, running alone —
   // same results endpoint, same params, same rendering. See README's
@@ -140,9 +134,7 @@
   document.getElementById('search-btn').addEventListener('click', runSearch);
   document.getElementById('sort-select').addEventListener('change', runSearch);
   document.getElementById('reset-btn').addEventListener('click', () => {
-    cStartEl.value = '';
-    cEndEl.value = '';
-    cEndEl.min = '';
+    cPicker.clear();
     clearResults();
     showMessage('');
   });

@@ -80,9 +80,11 @@
     </div>
 
     <div class="filter-panel" id="panel-dates">
-      <div class="row-2">
-        <div class="field"><label>Check-in</label><input type="date" id="f-start"></div>
-        <div class="field"><label>Check-out</label><input type="date" id="f-end"></div>
+      <!-- Date picker (Release A, 14/10/2026): bg.initDateRange() adds the
+           Check-in / Check-out buttons and the calendar. -->
+      <div id="f-dates">
+        <input type="hidden" id="f-start">
+        <input type="hidden" id="f-end">
       </div>
     </div>
 
@@ -140,18 +142,10 @@
   });
 
   // ---- Dates filter ---------------------------------------------------
-  // Check-out must always be later than check-in (30/08/2026 report) —
-  // enforced via the check-out input's own `min`, same fix as Calendar and
-  // the Property page's own availability check.
-  const fStartEl = document.getElementById('f-start');
-  const fEndEl = document.getElementById('f-end');
-  function syncFEndMin() {
-    if (!fStartEl.value) return;
-    const dayAfterStart = bg.addDaysIso(fStartEl.value, 1);
-    fEndEl.min = dayAfterStart;
-    if (fEndEl.value && fEndEl.value <= fStartEl.value) fEndEl.value = dayAfterStart;
-  }
-  fStartEl.addEventListener('change', syncFEndMin);
+  // Date picker (Release A, 14/10/2026), the same one as the Calendar and
+  // Property pages. It only lets a visitor pick a check-out after the
+  // check-in, which replaces the old `min` rule (30/08/2026).
+  const fPicker = bg.initDateRange(document.getElementById('f-dates'), { startInput: 'f-start', endInput: 'f-end' });
 
   // ---- Bedrooms stepper ----------------------------------------------
   let bedroomsMin = 0;
@@ -229,9 +223,7 @@
   function resetSearch() {
     document.getElementById('f-property-type').value = '';
     document.getElementById('f-region').value = '';
-    fStartEl.value = '';
-    fEndEl.value = '';
-    fEndEl.min = '';
+    fPicker.clear();
     document.getElementById('sort-select').value = '';
     bedroomsMin = 0;
     document.getElementById('f-bedrooms-value').textContent = '0';

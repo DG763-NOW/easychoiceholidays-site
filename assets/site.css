@@ -111,14 +111,28 @@ img { max-width: 100%; display: block; }
   padding: 22px 20px;
   text-align: left;
   font-size: 13px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  /* Three columns (14/10/2026): copyright + Trustpilot | logo + contact |
+     page links. Stacks on a phone, see the media query below. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
   gap: 20px;
-  flex-wrap: wrap;
 }
+.footer-left { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; min-width: 0; }
 .footer-copy { padding-top: 3px; }
-.footer-trustpilot { padding-top: 3px; display: flex; align-items: center; }
+.footer-trustpilot { display: flex; align-items: center; }
+.footer-trustpilot:empty { display: none; }
+.footer-org { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.footer-logo { height: 44px; width: auto; max-width: 220px; object-fit: contain; display: block; margin-bottom: 6px; }
+.footer-org-name { font-family: 'Archivo', Arial, sans-serif; font-weight: 800; font-size: 16px; color: #fff; margin-bottom: 4px; }
+.footer-org a { color: #C9D3EE; text-decoration: none; font-weight: 600; overflow-wrap: anywhere; }
+.footer-org a:hover { color: #fff; text-decoration: underline; }
+@media (max-width: 640px) {
+  .site-footer .bar { grid-template-columns: 1fr; gap: 18px; }
+  .footer-org { order: -1; }
+  .footer-left { align-items: center; text-align: center; }
+  .site-footer .footer-links { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; }
+}
 .footer-trustpilot a {
   color: #C9D3EE;
   text-decoration: none;
@@ -448,3 +462,101 @@ img { max-width: 100%; display: block; }
 .next-property-row { display: flex; justify-content: center; margin: 30px 0; }
 .bottom-cta-row { display: flex; gap: 12px; justify-content: center; margin: 40px 0 10px; }
 .calendar-note { background: var(--surface); border-radius: var(--radius); padding: 18px; font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+
+/* ---- Date range picker (Release A, 14/10/2026) ------------------------
+   Built by bg.initDateRange() in site.js; replaces the browser's own date
+   boxes on the Property, Search and Calendar pages. Approved design:
+   Claude outputs/date-picker-preview_2026_10_14_0940.html. Taken days use
+   a darker grey than the preview, at DG's request (14/10/2026). */
+:root {
+  --dp-range: #EAF0FD;
+  --dp-unavail: #D5DCE1;
+  --dp-unavail-text: #5F7280;
+}
+.dp { position: relative; }
+.dp-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.dp-label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
+.dp-trigger {
+  width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; font-family: inherit; color: var(--text); background: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px;
+}
+.dp-trigger .ph { color: var(--text-faint); }
+.dp-trigger.is-active { border-color: var(--petrol); box-shadow: 0 0 0 1px var(--petrol); }
+.dp-trigger svg { flex: none; color: var(--text-muted); }
+.dp-trigger:focus-visible, .dp-day:focus-visible, .dp-nav:focus-visible { outline: 3px solid var(--petrol); outline-offset: 2px; }
+.dp-pop {
+  position: absolute; z-index: 20; top: calc(100% - 6px); left: 0;
+  background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(8, 27, 93, 0.06), 0 8px 28px rgba(8, 27, 93, 0.12);
+  padding: 16px; width: max-content; max-width: min(640px, calc(100vw - 32px));
+}
+.dp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.dp-step { font-size: 13.5px; font-weight: 700; color: var(--petrol); }
+.dp-navs { display: flex; gap: 6px; }
+.dp-nav {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: #fff;
+  color: var(--petrol); cursor: pointer; display: grid; place-items: center; font-size: 18px; line-height: 1;
+}
+.dp-nav:disabled { opacity: 0.35; cursor: default; }
+.dp-months { display: flex; gap: 24px; }
+.dp-month { width: 280px; }
+.dp-month h3 { font-size: 15px; text-align: center; margin: 4px 0 10px; }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 40px); }
+.dp-dow { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-align: center; padding-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+.dp-cell { height: 40px; display: grid; place-items: center; position: relative; }
+.dp-cell.in-range { background: var(--dp-range); }
+.dp-cell.range-start { background: linear-gradient(to right, transparent 50%, var(--dp-range) 50%); }
+.dp-cell.range-end { background: linear-gradient(to left, transparent 50%, var(--dp-range) 50%); }
+.dp-cell.range-start.range-end { background: none; }
+.dp-day {
+  width: 38px; height: 38px; border-radius: 50%; border: 1px solid transparent; background: transparent;
+  font: inherit; font-size: 14px; color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; padding: 0;
+}
+.dp-day:hover:not([aria-disabled="true"]) { border-color: var(--petrol); }
+.dp-day.is-today { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.dp-day.is-endpoint { background: var(--petrol); color: #fff; font-weight: 700; }
+.dp-day[aria-disabled="true"] { color: var(--text-faint); cursor: default; }
+.dp-day.is-unavail { background: var(--dp-unavail); color: var(--dp-unavail-text); text-decoration: line-through; border-radius: 6px; }
+.dp-day.is-checkout-only { background: linear-gradient(135deg, #fff 50%, var(--dp-unavail) 50%); color: var(--text); border-radius: 6px; text-decoration: none; }
+.dp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.dp-summary { font-size: 14px; font-weight: 600; min-width: 0; }
+.dp-summary .muted { color: var(--text-muted); font-weight: 400; }
+.dp-hint { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin-top: 10px; }
+.dp-rules { font-size: 12.5px; color: var(--text-muted); margin-top: 10px; }
+.dp-actions { display: flex; gap: 8px; }
+.dp-actions .btn { padding: 8px 14px; }
+.dp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-muted); margin-top: 10px; }
+.dp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dp-legend i { width: 16px; height: 16px; border-radius: 4px; display: inline-block; border: 1px solid var(--border); }
+.dp-legend .k-sel { background: var(--petrol); border-color: var(--petrol); border-radius: 50%; }
+.dp-legend .k-unav { background: var(--dp-unavail); }
+.dp-legend .k-co { background: linear-gradient(135deg, #fff 50%, var(--dp-unavail) 50%); }
+.dp-backdrop { display: none; }
+@media (max-width: 640px) {
+  .dp-fields { gap: 10px; }
+  .dp-trigger { white-space: nowrap; }
+  .dp-trigger svg { display: none; }
+  .dp-backdrop { display: block; position: fixed; inset: 0; background: rgba(8, 27, 93, 0.35); z-index: 19; }
+  .dp-pop {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none;
+    border-radius: 16px 16px 0 0; max-height: 92%; overflow-y: auto;
+    padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .dp-months { justify-content: center; }
+  .dp-month { width: 100%; max-width: 360px; }
+  .dp-grid { grid-template-columns: repeat(7, 1fr); }
+  .dp-cell { height: 46px; }
+  .dp-day { width: 42px; height: 42px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dp-pop { animation: dp-in 140ms ease-out; }
+  @keyframes dp-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+
+/* Special offer statement in the Property page's Check Dates box
+   (DG, 14/10/2026): stays visible while the guest picks dates. */
+.cal-offer-note {
+  background: var(--dp-range); color: var(--petrol); font-weight: 700;
+  border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; font-size: 14.5px;
+}

@@ -92,9 +92,14 @@
     <div class="box" id="calendar" style="scroll-margin-top:20px;">
       <h2>Check Dates</h2>
       <p class="section-note" id="cal-restriction-note" style="display:none;"></p>
-      <div class="row-2">
-        <div class="field"><label>Check-in</label><input type="date" id="cal-start"></div>
-        <div class="field"><label>Check-out</label><input type="date" id="cal-end"></div>
+      <!-- Persistent offer statement above the date boxes (DG, 14/10/2026). -->
+      <p class="cal-offer-note" id="cal-offer-note" style="display:none;"></p>
+      <!-- Date picker (Release A, 14/10/2026): bg.initDateRange() adds the
+           Check-in / Check-out buttons and the calendar; the two hidden
+           inputs keep the ids the code below reads. -->
+      <div id="cal-dates">
+        <input type="hidden" id="cal-start">
+        <input type="hidden" id="cal-end">
       </div>
       <button class="btn btn-cta" id="cal-check-btn">Check availability</button>
       <div id="cal-result" style="margin-top:14px;"></div>
@@ -149,7 +154,7 @@
       .then((l) => {
         document.getElementById('property-loading').style.display = 'none';
         document.getElementById('property-body').style.display = 'block';
-        document.title = l.title + ' — Easychoice Holidays';
+        document.title = l.title + ' — ' + bg.orgName();
 
         // Cover / hero (06/09/2026, db/034_listing_hero.sql; revised
         // 07/09/2026 per DG feedback) — a plain, continuously cycling
@@ -268,30 +273,24 @@
           }
           offerBox.style.display = 'block';
 
-          // "Special Offer Dates" — per the template request, takes the
-          // visitor straight to the Calendar box with both the offer's
-          // start AND end date pre-filled, ready to check availability
-          // immediately. Previously this only set check-in, leaving
-          // check-out free to be set to anything (including a date before
-          // check-in) — the check-out input's `min` is only kept in sync
-          // by syncCalEndMin(), which runs on check-in's own 'change'
-          // event; setting check-in's .value directly here, as this
-          // handler always has, never fires that event, so the min never
-          // updated and an out-of-range check-out silently produced
-          // "Check-out must be after check-in" (30/08/2026 report). Now
-          // sets both dates AND calls syncCalEndMin() explicitly so the
-          // constraint is applied regardless of how check-in was set.
-          // (calStartEl/calEndEl/syncCalEndMin are declared further down
-          // this same callback, but this click handler only ever runs
-          // later, once a visitor clicks — by then they're initialized.)
+          // Offer statement in the Check Dates box (DG, 14/10/2026). It
+          // stays visible whatever the guest picks or clears. The "Special
+          // Offer Dates" buttons now only take the guest to Check Dates:
+          // pre-filling the offer's dates in the new date picker looked like
+          // a booked range and was lost on Clear. (Before 14/10/2026 they
+          // filled both dates in; see the 30/08/2026 notes in git history.)
+          const so = l.special_offer;
+          const numDate = (iso) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+          const offerNoteEl = document.getElementById('cal-offer-note');
+          offerNoteEl.textContent = 'Special offer'
+            + (so.price != null ? ' of ' + bg.fmtMoney(so.price) + ' per night' : '')
+            + ' from ' + numDate(so.start_date) + ' to ' + numDate(so.end_date);
+          offerNoteEl.style.display = 'block';
           document.querySelectorAll('.special-offer-dates-link').forEach((el) => {
             el.addEventListener('click', (e) => {
               e.preventDefault();
-              calStartEl.value = l.special_offer.start_date;
-              calEndEl.value = l.special_offer.end_date;
-              syncCalEndMin();
               document.getElementById('calendar').scrollIntoView({ behavior: 'smooth' });
-              calEndEl.focus();
+              calPicker.focus();
             });
           });
         }
@@ -344,21 +343,20 @@
         const calStartEl = document.getElementById('cal-start');
         const calEndEl = document.getElementById('cal-end');
 
-        // Check-out must always be later than check-in (30/08/2026 report)
-        // — enforced up front via the date input's own `min`, not just
-        // caught after the fact on submit, so an invalid range can't be
-        // picked in the first place. Bumping check-out forward (rather
-        // than just clearing it) means picking an earlier check-in while a
-        // check-out is already set slides both forward together instead of
-        // silently wiping the visitor's second choice.
-        function syncCalEndMin() {
-          if (!calStartEl.value) return;
-          const dayAfterStart = bg.addDaysIso(calStartEl.value, 1);
-          calEndEl.min = dayAfterStart;
-          if (calEndEl.value && calEndEl.value <= calStartEl.value) calEndEl.value = dayAfterStart;
+        // Date picker (Release A, 14/10/2026). It only lets a visitor
+        // pick a check-out after the check-in, which replaces the old
+        // `min`-on-the-check-out-box rule (30/08/2026).
+        const calPicker = bg.initDateRange(document.getElementById('cal-dates'), { startInput: calStartEl, endInput: calEndEl });
+        // Step 2b (14/10/2026): grey out the nights already taken and apply
+        // the property's booking rules. Asks for about 18 months ahead; if
+        // the call fails, the picker still works and the price check still
+        // refuses unavailable dates.
+        {
+          const avFrom = bg.madridTodayIso();
+          bg.api.unavailable(listingId, avFrom, bg.addDaysIso(avFrom, 540))
+            .then((av) => calPicker.setAvailability(av))
+            .catch(() => {});
         }
-        calStartEl.addEventListener('change', syncCalEndMin);
-        syncCalEndMin();
 
         // Booking Request button (06/10/2026) — only shown after a
         // successful availability check that resolved a price, and
@@ -367,6 +365,13 @@
         const bookingCtaEl = document.getElementById('booking-request-cta');
         const bookingBaseUrl = 'booking-request.html?listing_id=' + encodeURIComponent(listingId) + '&title=' + encodeURIComponent(l.title);
         function hideBookingCta() { bookingCtaEl.style.display = 'none'; }
+        // Changing the dates after a check clears that check's result and
+        // hides its Booking Request button, which would otherwise still
+        // carry the previous dates (14/10/2026).
+        document.getElementById('cal-dates').addEventListener('daterangechange', () => {
+          hideBookingCta();
+          document.getElementById('cal-result').innerHTML = '';
+        });
 
         document.getElementById('cal-check-btn').addEventListener('click', () => {
           hideBookingCta();

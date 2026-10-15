@@ -41,6 +41,11 @@
     listing(id) {
       return apiGet('/public/' + CFG.SLUG + '/listings/' + encodeURIComponent(id)).then((r) => r.listing);
     },
+    // Unavailable nights + booking rules for the date picker (Release A 2b,
+    // 14/10/2026): { from, to, busy: [{start, end (exclusive)}], rules }.
+    unavailable(id, from, to) {
+      return apiGet('/public/' + CFG.SLUG + '/listings/' + encodeURIComponent(id) + '/unavailable?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+    },
     specialOffers() {
       return apiGet('/public/' + CFG.SLUG + '/special-offers').then((r) => r.special_offers);
     },
@@ -102,6 +107,8 @@
         org_name: b.org_name || null,
         logo_url: b.logo_url || null,
         accent_color: b.accent_color || null,
+        contact_email: b.contact_email || null,
+        contact_phone: b.contact_phone || null,
       }));
     } catch (e) { /* e.g. storage full/disabled — next page just misses the cache */ }
   }
@@ -237,6 +244,17 @@
             tpEl.innerHTML = `<a href="${escapeHtml(b.trustpilot_url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
           }
         }
+        // Footer centre (Release A, 14/10/2026): logo, then the contact
+        // email and telephone from the Organisation screen. Re-rendered
+        // only when something differs from what the cache already painted
+        // (same Safari-repaint reason as the header logo above).
+        const orgEl = document.getElementById('footer-org');
+        const prevEmail = (cached && cached.contact_email) || null;
+        const prevPhone = (cached && cached.contact_phone) || null;
+        if (orgEl && (newLogo !== prevLogo || (b.org_name && b.org_name !== prevOrgName)
+            || (b.contact_email || null) !== prevEmail || (b.contact_phone || null) !== prevPhone)) {
+          orgEl.innerHTML = footerOrgHtml(newLogo, b.contact_email, b.contact_phone);
+        }
       })
       .catch(() => { /* fall back silently to the static config.js name/logo */ });
 
@@ -250,22 +268,41 @@
     }
   }
 
-  // Right-hand column: the full site nav, listed vertically (30/08/2026
-  // direction — supersedes the 29/08/2026 "just Home and Contact" choice).
-  // Reuses NAV rather than duplicating the label/href list a second time.
+  // Footer centre column (Release A, 14/10/2026, DG): the organisation's
+  // logo (or its name when no logo is uploaded), with the contact email and
+  // telephone from the Organisation screen underneath. Either line is left
+  // out when blank.
+  function footerOrgHtml(logoUrl, email, phone) {
+    const mark = logoUrl
+      ? `<img class="footer-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(CFG.ORG_NAME)}">`
+      : `<div class="footer-org-name">${escapeHtml(CFG.ORG_NAME)}</div>`;
+    const tel = phone ? String(phone).replace(/[^+\d]/g, '') : '';
+    return mark
+      + (email ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : '')
+      + (phone ? `<a href="tel:${escapeHtml(tel)}">${escapeHtml(phone)}</a>` : '');
+  }
+
+  // Three columns (14/10/2026): left, the copyright line with the Trustpilot
+  // link under it; centre, logo and contact details (footerOrgHtml); right,
+  // the full site nav listed vertically (30/08/2026 direction). Reuses NAV
+  // rather than duplicating the label/href list a second time.
   function renderFooter() {
     const el = document.getElementById('site-footer');
     if (!el) return;
     const links = NAV.map((n) => `<a href="${n.href}">${n.label}</a>`).join('');
+    const cached = readBrandingCache();
     // #footer-trustpilot starts empty — it's only ever populated by
-    // renderHeader's branding-fetch callback below, once/if the tenant
-    // has set a Trustpilot URL (03/09/2026 addition). No URL set means it
-    // just stays empty, same "upgrade once branding is back" approach as
-    // the logo/org name/accent colour.
+    // renderHeader's branding-fetch callback, once/if the tenant has set a
+    // Trustpilot URL (03/09/2026 addition). The centre column starts from
+    // the cached branding (or config.js) and is corrected by that same
+    // callback.
     el.innerHTML = `
       <div class="bar">
-        <div class="footer-copy">${escapeHtml(CFG.ORG_NAME)} &copy; ${new Date().getFullYear()}</div>
-        <div class="footer-trustpilot" id="footer-trustpilot"></div>
+        <div class="footer-left">
+          <div class="footer-copy">${escapeHtml(CFG.ORG_NAME)} &copy; ${new Date().getFullYear()}</div>
+          <div class="footer-trustpilot" id="footer-trustpilot"></div>
+        </div>
+        <div class="footer-org" id="footer-org">${footerOrgHtml((cached && cached.logo_url) || CFG.LOGO_URL, cached && cached.contact_email, cached && cached.contact_phone)}</div>
         <nav class="footer-links">${links}</nav>
       </div>`;
   }
@@ -988,6 +1025,371 @@
     setTimeout(() => map.invalidateSize(), 50);
   }
 
+  // ---- Date range picker (Release A, 14/10/2026) -------------------
+  // Replaces the browser's own <input type="date"> boxes on the Property,
+  // Search and Calendar pages, which looked and behaved differently in
+  // every browser (Safari vs Vivaldi). Design approved by DG from
+  // `Claude outputs/date-picker-preview_2026_10_14_0940.html`.
+  //
+  // Each page keeps its two existing inputs (now type="hidden", same ids),
+  // so the code that reads `.value` for the quote/search is unchanged. The
+  // picker adds two buttons styled like the old fields, and a calendar
+  // that opens under them (two months) or as a sheet from the bottom of
+  // the screen on a phone (one month).
+  //
+  // Dates are ISO strings (YYYY-MM-DD) with UTC arithmetic only, so a
+  // daylight-saving change can never shift a day. "Today" is Madrid time.
+  // Stays are counted in nights: the check-out day is not a night, so the
+  // first unavailable night after check-in is still a valid check-out.
+  //
+  // Step 2b (14/10/2026): the Property page calls
+  // picker.setAvailability(response) with the answer from
+  // GET /public/:slug/listings/:id/unavailable. Nights in `busy` are greyed
+  // out, and the property's rules (min/max stay, arrival and departure
+  // days, advance notice) stop a guest choosing a stay the price check
+  // would refuse. The price check still runs and has the final word. The
+  // Search and Calendar pages cover many properties, so nothing is greyed
+  // out there.
+  //
+  // Usage: const picker = bg.initDateRange(containerEl, { startInput, endInput });
+  // The container fires a 'daterangechange' event whenever the dates change.
+  function madridTodayIso() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    } catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+  function initDateRange(root, opts) {
+    const DP_SHORT = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+    const DP_LONG = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+    const DP_DM = { day: 'numeric', month: 'short' };
+    const CAL_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+    const dpFmt = (iso, o) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', Object.assign({ timeZone: 'UTC' }, o));
+    const daysBetween = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+    const ym = (iso) => iso.slice(0, 7);
+    const addMonths = (s, n) => {
+      let y = +s.slice(0, 4); let m = +s.slice(5, 7) - 1 + n;
+      y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+      return y + '-' + String(m + 1).padStart(2, '0');
+    };
+    const dowMon = (iso) => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+
+    const startInput = typeof opts.startInput === 'string' ? document.getElementById(opts.startInput) : opts.startInput;
+    const endInput = typeof opts.endInput === 'string' ? document.getElementById(opts.endInput) : opts.endInput;
+    const uid = startInput.id;
+    const mq = window.matchMedia('(max-width: 640px)');
+
+    const fields = document.createElement('div');
+    fields.className = 'dp-fields';
+    fields.innerHTML =
+      '<div class="dp-field"><span class="dp-label" id="' + uid + '-lbl-in">Check-in</span>' +
+      '<button type="button" class="dp-trigger" id="' + uid + '-btn-in" aria-labelledby="' + uid + '-lbl-in ' + uid + '-btn-in" aria-haspopup="dialog" aria-expanded="false"></button></div>' +
+      '<div class="dp-field"><span class="dp-label" id="' + uid + '-lbl-out">Check-out</span>' +
+      '<button type="button" class="dp-trigger" id="' + uid + '-btn-out" aria-labelledby="' + uid + '-lbl-out ' + uid + '-btn-out" aria-haspopup="dialog" aria-expanded="false"></button></div>';
+    root.classList.add('dp');
+    root.insertBefore(fields, root.firstChild);
+    const startBtn = fields.querySelector('#' + uid + '-btn-in');
+    const endBtn = fields.querySelector('#' + uid + '-btn-out');
+
+    const st = {
+      today: madridTodayIso(),
+      start: startInput.value || null,
+      end: endInput.value || null,
+      unavailable: new Set(),
+      minNights: 1,
+      maxNights: null,       // property's maximum stay (2b)
+      earliest: null,        // earliest check-in allowed by advance notice (2b)
+      arrivalDays: null,     // allowed arrival weekdays, 0=Sunday..6=Saturday (2b)
+      departureDays: null,   // allowed departure weekdays (2b)
+      hover: null, hint: null, mode: 'start',
+      view: null, focusIso: null, pop: null, backdrop: null,
+    };
+
+    const isUnavail = (iso) => st.unavailable.has(iso);
+    const dowSun = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay();
+    const arrivalOk = (iso) => !st.arrivalDays || st.arrivalDays.includes(dowSun(iso));
+    const departureOk = (iso) => !st.departureDays || st.departureDays.includes(dowSun(iso));
+    const canCheckIn = (iso) => iso >= st.today && (!st.earliest || iso >= st.earliest) && !isUnavail(iso) && arrivalOk(iso);
+    function lastCheckOut() {
+      let d = st.start; const limit = addDaysIso(st.start, 365);
+      while (d < limit) { if (isUnavail(d)) return d; d = addDaysIso(d, 1); }
+      return limit;
+    }
+    function canCheckOut(iso) {
+      if (!st.start || iso <= st.start) return false;
+      const n = daysBetween(st.start, iso);
+      if (n < st.minNights) return false;
+      if (st.maxNights && n > st.maxNights) return false;
+      if (!departureOk(iso)) return false;
+      return iso <= lastCheckOut();
+    }
+    const phase = () => (st.start && (!st.end || st.mode === 'end') ? 'end' : 'start');
+    const monthsShown = () => (mq.matches ? 1 : 2);
+
+    function rangeText(s, e) {
+      if (!s) return '<span class="muted">No dates chosen yet</span>';
+      const n = e ? daysBetween(s, e) : 0;
+      return dpFmt(s, DP_DM) + ' – ' + (e ? dpFmt(e, DP_DM) : '…') +
+        (n ? ' <span class="muted">· ' + n + (n === 1 ? ' night' : ' nights') + '</span>' : '');
+    }
+
+    function syncTriggers(fire) {
+      startBtn.innerHTML = (st.start ? '<span>' + dpFmt(st.start, DP_SHORT) + '</span>' : '<span class="ph">Add date</span>') + CAL_ICON;
+      endBtn.innerHTML = (st.end ? '<span>' + dpFmt(st.end, DP_SHORT) + '</span>' : '<span class="ph">Add date</span>') + CAL_ICON;
+      const changed = startInput.value !== (st.start || '') || endInput.value !== (st.end || '');
+      startInput.value = st.start || '';
+      endInput.value = st.end || '';
+      if (fire && changed) root.dispatchEvent(new CustomEvent('daterangechange', { detail: { start: st.start, end: st.end } }));
+    }
+
+    function setExpanded(on) {
+      [startBtn, endBtn].forEach((b) => b.setAttribute('aria-expanded', on ? 'true' : 'false'));
+      startBtn.classList.toggle('is-active', on && phase() === 'start');
+      endBtn.classList.toggle('is-active', on && phase() === 'end');
+    }
+
+    function open(which) {
+      st.mode = which;
+      const anchor = which === 'end' && st.start ? (st.end || addDaysIso(st.start, 1)) : (st.start || st.today);
+      st.view = ym(anchor < st.today ? st.today : anchor);
+      if (monthsShown() === 2 && which === 'end' && st.end && ym(st.end) !== ym(st.start)) st.view = ym(st.start);
+      st.focusIso = anchor < st.today ? st.today : anchor;
+      if (!st.pop) {
+        st.backdrop = document.createElement('div');
+        st.backdrop.className = 'dp-backdrop';
+        st.pop = document.createElement('div');
+        st.pop.className = 'dp-pop';
+        st.pop.setAttribute('role', 'dialog');
+        st.pop.setAttribute('aria-label', 'Choose your dates');
+        root.appendChild(st.backdrop);
+        root.appendChild(st.pop);
+        st.backdrop.addEventListener('click', () => close(false));
+        st.pop.addEventListener('keydown', onKey);
+      }
+      render();
+      setExpanded(true);
+      focusDay();
+    }
+
+    function close(returnFocus) {
+      if (!st.pop) return;
+      st.pop.remove(); st.backdrop.remove();
+      st.pop = null; st.backdrop = null; st.hover = null; st.hint = null;
+      setExpanded(false);
+      syncTriggers(true);
+      if (returnFocus) (st.end ? endBtn : startBtn).focus();
+    }
+
+    function choose(iso) {
+      if (phase() === 'start') {
+        if (!canCheckIn(iso)) return;
+        st.start = iso; st.end = null; st.hint = null; st.mode = 'end';
+      } else if (iso <= st.start) {
+        if (canCheckIn(iso)) { st.start = iso; st.end = null; st.hint = null; }
+      } else if (canCheckOut(iso)) {
+        st.end = iso; st.hint = null; st.mode = 'start';
+      } else if (daysBetween(st.start, iso) < st.minNights) {
+        st.hint = 'Minimum stay is ' + st.minNights + ' nights.';
+      } else if (st.maxNights && daysBetween(st.start, iso) > st.maxNights && iso <= lastCheckOut()) {
+        st.hint = 'Maximum stay is ' + st.maxNights + ' nights.';
+      } else if (!departureOk(iso) && iso <= lastCheckOut()) {
+        st.hint = 'Departure is only possible on ' + formatAllowedDays(st.departureDays) + '.';
+      } else if (canCheckIn(iso)) {
+        st.start = iso; st.end = null;
+        st.hint = 'Some nights in that range are not available, so your check-in moved to ' + dpFmt(iso, DP_DM) + '.';
+      } else {
+        st.hint = 'Some nights in that range are not available.';
+      }
+      st.focusIso = iso;
+      syncTriggers(true);
+      render();
+      setExpanded(true);
+      focusDay();
+    }
+
+    function render() {
+      const n = monthsShown();
+      const firstAllowed = ym(st.today);
+      if (st.view < firstAllowed) st.view = firstAllowed;
+      const ph = phase();
+      const rangeEnd = (ph === 'end' && st.hover && canCheckOut(st.hover)) ? st.hover : st.end;
+      let html = '<div class="dp-head"><div class="dp-step" aria-live="polite">' +
+        (ph === 'start' ? 'Choose your check-in date' : 'Now choose your check-out date') + '</div>' +
+        '<div class="dp-navs"><button type="button" class="dp-nav" data-nav="-1" aria-label="Previous month"' + (st.view <= firstAllowed ? ' disabled' : '') + '>&#8249;</button>' +
+        '<button type="button" class="dp-nav" data-nav="1" aria-label="Next month">&#8250;</button></div></div><div class="dp-months">';
+      for (let m = 0; m < n; m++) {
+        const mon = addMonths(st.view, m);
+        const first = mon + '-01';
+        const title = dpFmt(first, { month: 'long', year: 'numeric' });
+        html += '<div class="dp-month"><h3>' + title + '</h3><div class="dp-grid" role="grid" aria-label="' + title + '">';
+        ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].forEach((d) => { html += '<div class="dp-dow" aria-hidden="true">' + d + '</div>'; });
+        for (let i = 0; i < dowMon(first); i++) html += '<div class="dp-cell"></div>';
+        for (let d = first; ym(d) === mon; d = addDaysIso(d, 1)) {
+          const cls = ['dp-day']; const cell = ['dp-cell'];
+          let disabled; let label = dpFmt(d, DP_LONG);
+          if (d === st.today) cls.push('is-today');
+          const unav = isUnavail(d);
+          if (ph === 'start') {
+            disabled = !canCheckIn(d);
+            // The chosen check-out may be the first taken night (the
+            // check-out day is not a night of the stay), so never grey it.
+            if (unav && d >= st.today && d !== st.end) { cls.push('is-unavail'); label += ', not available'; }
+            else if (disabled && d >= st.today) label += ', not possible as an arrival day';
+          } else {
+            const okOut = canCheckOut(d);
+            const okIn = d < st.start && canCheckIn(d);
+            disabled = !(okOut || okIn || d === st.start);
+            if (unav && okOut) { cls.push('is-checkout-only'); label += ', check-out only'; }
+            else if (unav && d >= st.today) { cls.push('is-unavail'); label += ', not available'; }
+          }
+          if (d < st.today) disabled = true;
+          if (d === st.start || d === st.end) cls.push('is-endpoint');
+          if (st.start && rangeEnd) {
+            if (d > st.start && d < rangeEnd) cell.push('in-range');
+            if (d === st.start) cell.push('range-start');
+            if (d === rangeEnd) cell.push('range-end');
+          }
+          html += '<div class="' + cell.join(' ') + '" role="gridcell"><button type="button" class="' + cls.join(' ') + '" data-day="' + d + '"' +
+            ' tabindex="' + (d === st.focusIso ? '0' : '-1') + '" aria-label="' + label + '"' +
+            ((d === st.start || d === st.end) ? ' aria-pressed="true"' : '') + (disabled ? ' aria-disabled="true"' : '') + '>' + (+d.slice(8)) + '</button></div>';
+        }
+        html += '</div></div>';
+      }
+      html += '</div>';
+      if (st.hint) html += '<div class="dp-hint" role="status">' + escapeHtml(st.hint) + '</div>';
+      const rulesLine = rulesText();
+      if (rulesLine) html += '<div class="dp-rules">' + escapeHtml(rulesLine) + '</div>';
+      if (st.unavailable.size) {
+        html += '<div class="dp-legend"><span><i class="k-sel"></i>Your dates</span><span><i class="k-unav"></i>Not available</span><span><i class="k-co"></i>Check-out only</span></div>';
+      }
+      html += '<div class="dp-foot"><div class="dp-summary">' + rangeText(st.start, rangeEnd) + '</div><div class="dp-actions">' +
+        '<button type="button" class="btn btn-secondary" data-act="clear">Clear</button>' +
+        '<button type="button" class="btn btn-cta" data-act="done">Done</button></div></div>';
+      st.pop.innerHTML = html;
+
+      st.pop.querySelectorAll('.dp-nav').forEach((b) => {
+        b.addEventListener('click', () => {
+          st.view = addMonths(st.view, +b.dataset.nav);
+          st.focusIso = (st.view + '-01') < st.today ? st.today : st.view + '-01';
+          render();
+        });
+      });
+      st.pop.querySelectorAll('.dp-day').forEach((b) => {
+        b.addEventListener('click', () => { if (b.getAttribute('aria-disabled') !== 'true') choose(b.dataset.day); });
+        b.addEventListener('mouseenter', () => {
+          if (phase() === 'end' && st.hover !== b.dataset.day) { st.hover = b.dataset.day; paintRange(); }
+        });
+      });
+      st.pop.querySelector('[data-act="clear"]').addEventListener('click', () => {
+        st.start = null; st.end = null; st.hint = null; st.hover = null; st.mode = 'start';
+        st.focusIso = st.today;
+        syncTriggers(true); render(); setExpanded(true); focusDay();
+      });
+      st.pop.querySelector('[data-act="done"]').addEventListener('click', () => close(true));
+    }
+
+    // The property's booking rules in one short line under the calendar
+    // (2b), so a greyed-out day never looks unexplained.
+    function rulesText() {
+      const parts = [];
+      if (st.minNights > 1) parts.push('Minimum stay ' + st.minNights + ' nights');
+      if (st.maxNights) parts.push('maximum ' + st.maxNights + ' nights');
+      if (st.arrivalDays) parts.push('arrival on ' + formatAllowedDays(st.arrivalDays));
+      if (st.departureDays) parts.push('departure on ' + formatAllowedDays(st.departureDays));
+      if (st.earliest && st.earliest > st.today) parts.push('earliest arrival ' + dpFmt(st.earliest, DP_DM));
+      if (!parts.length) return '';
+      const t = parts.join(' · ');
+      return t.charAt(0).toUpperCase() + t.slice(1) + '.';
+    }
+
+    // Hover only repaints the range band, so the pointer never loses the
+    // button it is over (a full re-render would).
+    function paintRange() {
+      const rangeEnd = st.hover && canCheckOut(st.hover) ? st.hover : null;
+      const s = st.start;
+      st.pop.querySelectorAll('.dp-day').forEach((b) => {
+        const d = b.dataset.day; const c = b.parentNode.classList;
+        c.toggle('in-range', !!rangeEnd && d > s && d < rangeEnd);
+        c.toggle('range-start', !!rangeEnd && d === s);
+        c.toggle('range-end', !!rangeEnd && d === rangeEnd);
+      });
+      const sum = st.pop.querySelector('.dp-summary');
+      if (sum) sum.innerHTML = rangeText(s, rangeEnd);
+    }
+
+    function focusDay() {
+      const b = st.pop && st.pop.querySelector('[data-day="' + st.focusIso + '"]');
+      if (b) b.focus({ preventScroll: mq.matches });
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(true); return; }
+      const t = e.target;
+      if (!t.dataset || !t.dataset.day) return;
+      const day = t.dataset.day;
+      const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+      let next = null;
+      if (step) next = addDaysIso(day, step);
+      else if (e.key === 'PageUp') next = addDaysIso(day, -28);
+      else if (e.key === 'PageDown') next = addDaysIso(day, 28);
+      else if (e.key === 'Home') next = addDaysIso(day, -dowMon(day));
+      else if (e.key === 'End') next = addDaysIso(day, 6 - dowMon(day));
+      if (!next) return;
+      e.preventDefault();
+      if (next < st.today) next = st.today;
+      st.focusIso = next;
+      if (phase() === 'end') st.hover = next;
+      const last = addMonths(st.view, monthsShown() - 1);
+      if (ym(next) < st.view) st.view = ym(next);
+      else if (ym(next) > last) st.view = addMonths(ym(next), -(monthsShown() - 1));
+      render();
+      focusDay();
+    }
+
+    startBtn.addEventListener('click', () => open('start'));
+    endBtn.addEventListener('click', () => open(st.start ? 'end' : 'start'));
+    document.addEventListener('mousedown', (e) => { if (st.pop && !root.contains(e.target)) close(false); });
+    const onMq = () => { if (st.pop) render(); };
+    if (mq.addEventListener) mq.addEventListener('change', onMq); else mq.addListener(onMq);
+    syncTriggers(false);
+
+    return {
+      // Set both dates from code (e.g. the Property page's "Special Offer
+      // Dates" link). Silently ignores an invalid pair.
+      setRange(start, end) {
+        if (!start || !end || end <= start) return;
+        st.start = start; st.end = end; st.mode = 'start';
+        syncTriggers(true);
+      },
+      clear() {
+        st.start = null; st.end = null; st.mode = 'start';
+        if (st.pop) close(false); else syncTriggers(true);
+      },
+      // Nights that cannot be booked, as ISO dates, plus the minimum stay.
+      setUnavailable(nights, o) {
+        st.unavailable = new Set(nights || []);
+        st.minNights = (o && o.minNights) || 1;
+        if (st.pop) render();
+      },
+      // Step 2b (14/10/2026): the whole answer from the unavailable-nights
+      // route. `busy` ranges have an exclusive end (the first free night).
+      setAvailability(data) {
+        const nights = new Set();
+        ((data && data.busy) || []).forEach((b) => {
+          for (let d = b.start; d < b.end; d = addDaysIso(d, 1)) nights.add(d);
+        });
+        const r = (data && data.rules) || {};
+        st.unavailable = nights;
+        st.minNights = Math.max(1, r.min_stay_nights || 1);
+        st.maxNights = r.max_stay_nights || null;
+        st.earliest = r.earliest_check_in || null;
+        st.arrivalDays = r.allowed_arrival_days && r.allowed_arrival_days.length ? r.allowed_arrival_days : null;
+        st.departureDays = r.allowed_departure_days && r.allowed_departure_days.length ? r.allowed_departure_days : null;
+        if (st.pop) render();
+      },
+      focus() { startBtn.focus(); },
+    };
+  }
+
   // ---- expose -----------------------------------------------------
   window.bg = {
     api,
@@ -1003,6 +1405,8 @@
     costBreakdownHtml,
     fmtDateRange,
     addDaysIso,
+    madridTodayIso,
+    initDateRange,
     formatAllowedDays,
     arrivalDepartureNote,
     metaLine,
