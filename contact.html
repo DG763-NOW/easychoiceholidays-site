@@ -50,7 +50,7 @@
         <div class="field"><label>Email</label><input type="email" id="c-email" required></div>
       </div>
       <div class="field"><label>Phone (optional)</label><input type="tel" id="c-phone" maxlength="40" autocomplete="tel"></div>
-      <div class="field"><label>Property (optional)</label><input type="text" id="c-property" placeholder="e.g. Casa Mirador"></div>
+      <div class="field"><label>Property (optional)</label><select id="c-property"><option value="">General enquiry (no particular property)</option></select></div>
       <div class="field"><label>Message</label><textarea id="c-message" required></textarea></div>
       <!-- Honeypot: hidden from people, often filled in by bots. -->
       <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
@@ -79,7 +79,19 @@
   bg.renderFooter();
   // Full slider, same as Home — see search.html's matching comment
   // (29/08/2026: dropped `minimal: true` everywhere for consistency).
-  bg.api.listings({}).then((listings) => bg.initHeroSlider('hero-slider-mount', listings)).catch(() => {});
+  // The same list fills the Property choice (Release B2, 15/10/2026): the
+  // enquiry is linked to a property only by choosing it here (or arriving
+  // from a property's Contact Us button), never by typed text.
+  bg.api.listings({}).then((listings) => {
+    bg.initHeroSlider('hero-slider-mount', listings);
+    const sel = document.getElementById('c-property');
+    (listings || []).slice().sort((a, b) => String(a.title).localeCompare(String(b.title))).forEach((l) => {
+      const o = document.createElement('option');
+      o.value = l.id; o.textContent = l.title;
+      sel.appendChild(o);
+    });
+    if (listingId) sel.value = listingId;
+  }).catch(() => {});
 
   // Arriving from a Property page's "Contact Us" button carries the
   // listing along (see property.html) so the message can be tied to the
@@ -89,7 +101,6 @@
   const listingId = qs.get('listing_id') || '';
   const listingTitle = qs.get('title') || '';
   if (listingTitle) {
-    document.getElementById('c-property').value = listingTitle;
     document.getElementById('contact-context-note').textContent =
       `Have a question about ${listingTitle} or a booking? Send us a message and we'll get back to you.`;
   }
@@ -129,16 +140,11 @@
     e.preventDefault();
     const name = document.getElementById('c-name').value.trim();
     const email = document.getElementById('c-email').value.trim();
-    const property = document.getElementById('c-property').value.trim();
+    // The chosen property (Release B2). The server still checks it is one of
+    // this organisation's published properties before linking it.
+    const chosenListingId = document.getElementById('c-property').value || '';
     const phone = document.getElementById('c-phone').value.trim();
-    let message = document.getElementById('c-message').value.trim();
-    // Only verified listing context (a real listing_id) is trusted by the
-    // backend to name the property in the notification — a free-typed
-    // property name with no matching id is folded into the message text
-    // instead, so that context isn't silently lost.
-    if (property && !listingId) {
-      message = `Property: ${property}\n\n${message}`;
-    }
+    const message = document.getElementById('c-message').value.trim();
 
     const btn = document.getElementById('contact-submit-btn');
     const errorEl = document.getElementById('contact-error');
@@ -147,7 +153,7 @@
     btn.textContent = 'Sending…';
 
     try {
-      await bg.api.submitEnquiry({ name, email, phone: phone || undefined, message, listing_id: listingId || undefined, website: document.getElementById('c-website').value });
+      await bg.api.submitEnquiry({ name, email, phone: phone || undefined, message, listing_id: chosenListingId || undefined, website: document.getElementById('c-website').value });
       document.getElementById('contact-form-box').style.display = 'none';
       document.getElementById('contact-success-box').style.display = 'block';
       document.getElementById('contact-success-box').scrollIntoView({ behavior: 'smooth' });
