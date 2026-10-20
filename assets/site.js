@@ -1391,6 +1391,19 @@
   }
 
   // ---- expose -----------------------------------------------------
+  // Cancellation policy (Release E step 1, 20/10/2026). The API sends
+  // listing.cancellation_policy as { lines: [...], note } — already worded,
+  // with the property's own policy winning over the organisation's — or
+  // null when none is saved, in which case nothing is shown.
+  function cancellationPolicyHtml(policy) {
+    if (!policy || !Array.isArray(policy.lines) || policy.lines.length === 0) return '';
+    const items = policy.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('');
+    const note = policy.note && String(policy.note).trim()
+      ? `<p class="cancel-policy-note">${escapeHtml(String(policy.note).trim()).replace(/\n/g, '<br>')}</p>` : '';
+    return `<ul class="cancel-policy-list">${items}</ul>${note}`
+      + '<p class="cancel-policy-small">Charges are a percentage of the accommodation price only.</p>';
+  }
+
   window.bg = {
     api,
     renderHeader,
@@ -1409,6 +1422,7 @@
     initDateRange,
     formatAllowedDays,
     arrivalDepartureNote,
+    cancellationPolicyHtml,
     metaLine,
     thumbHtml,
     cardHtml,

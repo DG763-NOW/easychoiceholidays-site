@@ -109,6 +109,13 @@
       </div>
     </div>
 
+    <!-- Cancellation policy (Release E step 1, 20/10/2026): hidden unless
+         the property or the organisation has saved one. -->
+    <div class="box" id="cancel-policy-box" style="display:none;">
+      <h2>Cancellation Policy</h2>
+      <div id="cancel-policy"></div>
+    </div>
+
     <div class="bottom-cta-row">
       <a class="btn btn-secondary" href="index.html">Home</a>
       <a class="btn btn-secondary" href="search.html">Search</a>
@@ -237,6 +244,15 @@
           licenceEl.style.display = 'block';
         }
         document.getElementById('ov-amenities').innerHTML = amenityChips(l.amenities);
+
+        // Cancellation policy (Release E step 1, 20/10/2026).
+        {
+          const policyHtml = bg.cancellationPolicyHtml(l.cancellation_policy);
+          if (policyHtml) {
+            document.getElementById('cancel-policy').innerHTML = policyHtml;
+            document.getElementById('cancel-policy-box').style.display = 'block';
+          }
+        }
 
         // Arrival/departure day restrictions (03/09/2026) — a persistent
         // hint under "Check Dates", visible before the visitor even

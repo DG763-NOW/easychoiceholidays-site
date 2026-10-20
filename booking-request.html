@@ -107,6 +107,12 @@
           <p class="section-note">Optional. You can change your mind at any time by contacting us.</p>
         </div>
       </div>
+      <!-- Cancellation policy (Release E step 1, 20/10/2026): shown before
+           the guest sends the request; hidden when none is saved. -->
+      <div class="br-policy" id="br-policy" style="display:none;">
+        <h3>Cancellation policy</h3>
+        <div id="br-policy-body"></div>
+      </div>
       <p class="section-note" id="br-error" style="display:none;color:#D14343;font-weight:700;"></p>
       <button class="btn btn-cta" type="submit" id="br-submit-btn">Send Booking Request</button>
       <p class="section-note" style="margin:14px 0 0;">Please note that your contact details will not be used for any purposes beyond booking your holiday, unless you have ticked the box above.</p>
@@ -230,7 +236,15 @@
   childrenEl.addEventListener('input', updateGuests);
   if (listingId) {
     bg.api.listing(listingId)
-      .then((l) => { maxGuests = l && l.max_guests != null ? l.max_guests : null; updateGuests(); })
+      .then((l) => {
+        maxGuests = l && l.max_guests != null ? l.max_guests : null;
+        updateGuests();
+        const policyHtml = bg.cancellationPolicyHtml(l && l.cancellation_policy);
+        if (policyHtml) {
+          document.getElementById('br-policy-body').innerHTML = policyHtml;
+          document.getElementById('br-policy').style.display = 'block';
+        }
+      })
       .catch(() => {});
   }
 
