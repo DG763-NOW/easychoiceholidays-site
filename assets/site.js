@@ -39,7 +39,12 @@
       return apiGet('/public/' + CFG.SLUG + '/listings' + suffix).then((r) => r.listings);
     },
     listing(id) {
-      return apiGet('/public/' + CFG.SLUG + '/listings/' + encodeURIComponent(id)).then((r) => r.listing);
+      // Release G (21/10/2026): the CMS counts a property page view each
+      // time a property is loaded. Only the Property page is a view; other
+      // pages that load the property (Booking Request) say so with count=0.
+      const isPropertyPage = /\/property(\.html)?$/.test(location.pathname);
+      const suffix = isPropertyPage ? '' : '?count=0';
+      return apiGet('/public/' + CFG.SLUG + '/listings/' + encodeURIComponent(id) + suffix).then((r) => r.listing);
     },
     // Unavailable nights + booking rules for the date picker (Release A 2b,
     // 14/10/2026): { from, to, busy: [{start, end (exclusive)}], rules }.
