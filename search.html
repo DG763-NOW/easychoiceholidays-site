@@ -145,7 +145,11 @@
   // Date picker (Release A, 14/10/2026), the same one as the Calendar and
   // Property pages. It only lets a visitor pick a check-out after the
   // check-in, which replaces the old `min` rule (30/08/2026).
-  const fPicker = bg.initDateRange(document.getElementById('f-dates'), { startInput: 'f-start', endInput: 'f-end' });
+  // The calendar's Check Availability button runs the search (DG, 25/10/2026).
+  const fPicker = bg.initDateRange(document.getElementById('f-dates'), {
+    startInput: 'f-start', endInput: 'f-end',
+    onApply: () => document.getElementById('search-btn').click(),
+  });
 
   // ---- Bedrooms stepper ----------------------------------------------
   let bedroomsMin = 0;

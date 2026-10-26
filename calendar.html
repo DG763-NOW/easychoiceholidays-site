@@ -90,7 +90,11 @@
   // Date picker (Release A, 14/10/2026). It only lets a visitor pick a
   // check-out after the check-in, which replaces the old `min` rule
   // (30/08/2026).
-  const cPicker = bg.initDateRange(document.getElementById('c-dates'), { startInput: 'c-start', endInput: 'c-end' });
+  // The calendar's Check Availability button runs the search (DG, 25/10/2026).
+  const cPicker = bg.initDateRange(document.getElementById('c-dates'), {
+    startInput: 'c-start', endInput: 'c-end',
+    onApply: () => document.getElementById('search-btn').click(),
+  });
 
   // The Calendar page IS the Search page's Dates filter, running alone —
   // same results endpoint, same params, same rendering. See README's

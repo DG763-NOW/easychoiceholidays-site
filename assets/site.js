@@ -1056,8 +1056,16 @@
   // Search and Calendar pages cover many properties, so nothing is greyed
   // out there.
   //
-  // Usage: const picker = bg.initDateRange(containerEl, { startInput, endInput });
+  // Usage: const picker = bg.initDateRange(containerEl, { startInput, endInput,
+  //   applyLabel, onApply });
   // The container fires a 'daterangechange' event whenever the dates change.
+  //
+  // Buttons (DG, 25/10/2026): Cancel and one action button, "Check price"
+  // (DG, 26/10/2026: the same as the CMS) unless the page gives `applyLabel`. Cancel (also Escape,
+  // or a click outside the calendar) puts back the dates that were there
+  // when the calendar opened. The action button needs both dates; it closes
+  // the calendar, fires 'daterangeapply' on the container and calls
+  // `onApply(start, end)`, so the page runs its own check or search.
   function madridTodayIso() {
     try {
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -1107,7 +1115,9 @@
       departureDays: null,   // allowed departure weekdays (2b)
       hover: null, hint: null, mode: 'start',
       view: null, focusIso: null, pop: null, backdrop: null,
+      saved: null,           // the dates when the calendar opened (Cancel)
     };
+    const applyLabel = opts.applyLabel || 'Check price';
 
     const isUnavail = (iso) => st.unavailable.has(iso);
     const dowSun = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay();
@@ -1159,6 +1169,7 @@
       if (monthsShown() === 2 && which === 'end' && st.end && ym(st.end) !== ym(st.start)) st.view = ym(st.start);
       st.focusIso = anchor < st.today ? st.today : anchor;
       if (!st.pop) {
+        st.saved = { start: st.start, end: st.end };
         st.backdrop = document.createElement('div');
         st.backdrop.className = 'dp-backdrop';
         st.pop = document.createElement('div');
@@ -1167,7 +1178,7 @@
         st.pop.setAttribute('aria-label', 'Choose your dates');
         root.appendChild(st.backdrop);
         root.appendChild(st.pop);
-        st.backdrop.addEventListener('click', () => close(false));
+        st.backdrop.addEventListener('click', () => close(false, true));
         st.pop.addEventListener('keydown', onKey);
       }
       render();
@@ -1175,8 +1186,12 @@
       focusDay();
     }
 
-    function close(returnFocus) {
+    // `revert` (Cancel, Escape, a click outside): put back the dates the
+    // calendar opened with.
+    function close(returnFocus, revert) {
       if (!st.pop) return;
+      if (revert && st.saved) { st.start = st.saved.start; st.end = st.saved.end; st.mode = 'start'; }
+      st.saved = null;
       st.pop.remove(); st.backdrop.remove();
       st.pop = null; st.backdrop = null; st.hover = null; st.hint = null;
       setExpanded(false);
@@ -1267,8 +1282,8 @@
         html += '<div class="dp-legend"><span><i class="k-sel"></i>Your dates</span><span><i class="k-unav"></i>Not available</span><span><i class="k-co"></i>Check-out only</span></div>';
       }
       html += '<div class="dp-foot"><div class="dp-summary">' + rangeText(st.start, rangeEnd) + '</div><div class="dp-actions">' +
-        '<button type="button" class="btn btn-secondary" data-act="clear">Clear</button>' +
-        '<button type="button" class="btn btn-cta" data-act="done">Done</button></div></div>';
+        '<button type="button" class="btn btn-secondary" data-act="cancel">Cancel</button>' +
+        '<button type="button" class="btn btn-cta" data-act="apply"' + (st.start && st.end ? '' : ' disabled') + '>' + escapeHtml(applyLabel) + '</button></div></div>';
       st.pop.innerHTML = html;
 
       st.pop.querySelectorAll('.dp-nav').forEach((b) => {
@@ -1284,12 +1299,15 @@
           if (phase() === 'end' && st.hover !== b.dataset.day) { st.hover = b.dataset.day; paintRange(); }
         });
       });
-      st.pop.querySelector('[data-act="clear"]').addEventListener('click', () => {
-        st.start = null; st.end = null; st.hint = null; st.hover = null; st.mode = 'start';
-        st.focusIso = st.today;
-        syncTriggers(true); render(); setExpanded(true); focusDay();
-      });
-      st.pop.querySelector('[data-act="done"]').addEventListener('click', () => close(true));
+      st.pop.querySelector('[data-act="cancel"]').addEventListener('click', () => close(true, true));
+      st.pop.querySelector('[data-act="apply"]').addEventListener('click', apply);
+    }
+
+    function apply() {
+      if (!st.start || !st.end) return;
+      close(true, false);
+      root.dispatchEvent(new CustomEvent('daterangeapply', { detail: { start: st.start, end: st.end } }));
+      if (typeof opts.onApply === 'function') opts.onApply(st.start, st.end);
     }
 
     // The property's booking rules in one short line under the calendar
@@ -1327,7 +1345,7 @@
     }
 
     function onKey(e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(true); return; }
+      if (e.key === 'Escape') { e.preventDefault(); close(true, true); return; }
       const t = e.target;
       if (!t.dataset || !t.dataset.day) return;
       const day = t.dataset.day;
@@ -1352,7 +1370,7 @@
 
     startBtn.addEventListener('click', () => open('start'));
     endBtn.addEventListener('click', () => open(st.start ? 'end' : 'start'));
-    document.addEventListener('mousedown', (e) => { if (st.pop && !root.contains(e.target)) close(false); });
+    document.addEventListener('mousedown', (e) => { if (st.pop && !root.contains(e.target)) close(false, true); });
     const onMq = () => { if (st.pop) render(); };
     if (mq.addEventListener) mq.addEventListener('change', onMq); else mq.addListener(onMq);
     syncTriggers(false);

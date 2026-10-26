@@ -362,7 +362,12 @@
         // Date picker (Release A, 14/10/2026). It only lets a visitor
         // pick a check-out after the check-in, which replaces the old
         // `min`-on-the-check-out-box rule (30/08/2026).
-        const calPicker = bg.initDateRange(document.getElementById('cal-dates'), { startInput: calStartEl, endInput: calEndEl });
+        // The calendar's Check Availability button runs the same check as
+        // the button under it (DG, 25/10/2026).
+        const calPicker = bg.initDateRange(document.getElementById('cal-dates'), {
+          startInput: calStartEl, endInput: calEndEl,
+          onApply: () => document.getElementById('cal-check-btn').click(),
+        });
         // Step 2b (14/10/2026): grey out the nights already taken and apply
         // the property's booking rules. Asks for about 18 months ahead; if
         // the call fails, the picker still works and the price check still
