@@ -114,12 +114,15 @@
         accent_color: b.accent_color || null,
         contact_email: b.contact_email || null,
         contact_phone: b.contact_phone || null,
+        whatsapp_number: b.whatsapp_number || null,
       }));
     } catch (e) { /* e.g. storage full/disabled — next page just misses the cache */ }
   }
 
   // ---- Header / footer ---------------------------------------------
-  const NAV = [
+  // Website editions (20/11/2026): a site may set its own menu in config.js
+  // (BG_SITE.NAV, e.g. the Mini template); otherwise the Standard menu.
+  const NAV = (CFG && Array.isArray(CFG.NAV) && CFG.NAV.length) ? CFG.NAV : [
     { href: 'index.html', label: 'Home' },
     { href: 'search.html', label: 'Search' },
     { href: 'special-offers.html', label: 'Special Offers' },
@@ -260,6 +263,9 @@
             || (b.contact_email || null) !== prevEmail || (b.contact_phone || null) !== prevPhone)) {
           orgEl.innerHTML = footerOrgHtml(newLogo, b.contact_email, b.contact_phone);
         }
+        // "Chat on WhatsApp" (db/060, 10/11/2026): the organisation's own
+        // number from the Organisation screen; none hides the buttons.
+        setWhatsAppNumber(b.whatsapp_number || null);
       })
       .catch(() => { /* fall back silently to the static config.js name/logo */ });
 
@@ -271,6 +277,109 @@
     if (document.title.indexOf(' — ') !== -1) {
       document.title = document.title.replace(/ — .+$/, ' — ' + CFG.ORG_NAME);
     }
+  }
+
+  // ---- Chat on WhatsApp (10/11/2026) ------------------------------------
+  // When the organisation has a WhatsApp number on its Organisation screen,
+  // every page shows a round button in the bottom right corner, and any
+  // element with class "whatsapp-link" (the property page has one next to
+  // Contact Us) becomes a link too. Each opens a chat with that number in the
+  // guest's own WhatsApp (wa.me), with a message ready to send; the property
+  // page names its property in it (setWhatsAppMessage). Nothing goes through
+  // the CMS. Shown from the cached branding first, then corrected by the
+  // branding fetch, like the logo.
+  const WA = { number: null, message: 'Hello, I have a question.' };
+  function whatsAppUrl() {
+    return 'https://wa.me/' + WA.number + '?text=' + encodeURIComponent(WA.message);
+  }
+  function renderWhatsApp() {
+    let fab = document.getElementById('wa-float');
+    if (!WA.number) {
+      if (fab) fab.remove();
+      document.querySelectorAll('.whatsapp-link').forEach((a) => { a.style.display = 'none'; });
+      return;
+    }
+    if (!fab) {
+      fab = document.createElement('a');
+      fab.id = 'wa-float';
+      fab.className = 'wa-float';
+      fab.target = '_blank';
+      fab.rel = 'noopener noreferrer';
+      fab.setAttribute('aria-label', 'Chat on WhatsApp');
+      fab.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v11H9l-5 4V5z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M8 10.5h.01M12 10.5h.01M16 10.5h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span>Chat on WhatsApp</span>';
+      document.body.appendChild(fab);
+    }
+    fab.href = whatsAppUrl();
+    document.querySelectorAll('.whatsapp-link').forEach((a) => {
+      a.href = whatsAppUrl();
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = '';
+    });
+  }
+  // Laptops and desktops (DG, 11/11/2026): a browser there cannot hand a
+  // wa.me link to the WhatsApp app, so it opened WhatsApp's own web page in
+  // a new tab. A website cannot tell whether the app is installed, so a
+  // click there opens a small menu instead: "Open WhatsApp app" (the
+  // whatsapp:// link, straight into the desktop app) or "Use WhatsApp Web".
+  // Phones and tablets keep the plain wa.me link, which opens the app.
+  function isDesktop() {
+    try {
+      if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return false;
+      if (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform || '')) return false; // iPad in desktop mode
+      return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    } catch (e) { return false; }
+  }
+  function closeWhatsAppMenu() {
+    const m = document.getElementById('wa-menu');
+    if (m) m.remove();
+    document.removeEventListener('keydown', waMenuKey);
+    document.removeEventListener('mousedown', waMenuOutside, true);
+  }
+  function waMenuKey(e) { if (e.key === 'Escape') closeWhatsAppMenu(); }
+  function waMenuOutside(e) {
+    const m = document.getElementById('wa-menu');
+    if (m && !m.contains(e.target) && !e.target.closest('#wa-float, .whatsapp-link')) closeWhatsAppMenu();
+  }
+  function openWhatsAppMenu(anchor) {
+    closeWhatsAppMenu();
+    const q = 'phone=' + WA.number + '&text=' + encodeURIComponent(WA.message);
+    const m = document.createElement('div');
+    m.id = 'wa-menu';
+    m.className = 'wa-menu';
+    m.setAttribute('role', 'menu');
+    m.innerHTML = '<a role="menuitem" href="whatsapp://send?' + q + '">Open WhatsApp app</a>'
+      + '<a role="menuitem" href="https://web.whatsapp.com/send?' + q + '" target="_blank" rel="noopener noreferrer">Use WhatsApp Web</a>';
+    document.body.appendChild(m);
+    m.addEventListener('click', () => setTimeout(closeWhatsAppMenu, 0));
+    // Above the button, right-aligned with it; below it if there is no room.
+    const r = anchor.getBoundingClientRect();
+    const w = m.offsetWidth, h = m.offsetHeight;
+    let top = r.top - h - 8;
+    if (top < 8) top = r.bottom + 8;
+    let left = Math.min(r.right - w, window.innerWidth - w - 8);
+    if (left < 8) left = 8;
+    m.style.top = top + 'px';
+    m.style.left = left + 'px';
+    m.querySelector('a').focus();
+    document.addEventListener('keydown', waMenuKey);
+    document.addEventListener('mousedown', waMenuOutside, true);
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('#wa-float, .whatsapp-link');
+    if (!a || !WA.number || !isDesktop()) return;
+    e.preventDefault();
+    if (document.getElementById('wa-menu')) { closeWhatsAppMenu(); return; }
+    openWhatsAppMenu(a);
+  });
+
+  function setWhatsAppNumber(number) {
+    WA.number = number && /^[1-9]\d{7,14}$/.test(String(number)) ? String(number) : null;
+    renderWhatsApp();
+  }
+  function setWhatsAppMessage(text) {
+    if (text) WA.message = String(text);
+    renderWhatsApp();
   }
 
   // Footer centre column (Release A, 14/10/2026, DG): the organisation's
@@ -310,6 +419,7 @@
         <div class="footer-org" id="footer-org">${footerOrgHtml((cached && cached.logo_url) || CFG.LOGO_URL, cached && cached.contact_email, cached && cached.contact_phone)}</div>
         <nav class="footer-links">${links}</nav>
       </div>`;
+    setWhatsAppNumber(cached && cached.whatsapp_number);
   }
 
   // ---- Formatting helpers -------------------------------------------
@@ -425,13 +535,80 @@
   }
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
+  // ---- Resized photos (19/11/2026) -----------------------------------
+  // Photos are uploaded at up to 2,400 pixels wide. Showing that file in a
+  // 400-pixel card made moving between properties take 2-3 seconds (DG,
+  // 19/11/2026). Supabase Storage's render/image endpoint (Pro plan, the
+  // same one the print page and the property PDF use) returns the photo
+  // scaled to the width asked for, so each spot asks for what it shows,
+  // rounded up to a step of 200 pixels (so the CDN caches a few sizes, not
+  // hundreds) and doubled on high-density screens. Supabase bills per
+  // original photo per month, not per size or request.
+  //   - A URL that isn't a Supabase Storage object URL is left as it is.
+  //   - If a resized photo fails to load, the original is used instead
+  //     (onerror on <img>, a probe image for background photos).
+  const IMG_STEP = 200;
+  const IMG_MAX = 2000;
+  const IMG_QUALITY = 72;
+  function imgWidthFor(cssWidth) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.ceil((Number(cssWidth) || 400) * dpr / IMG_STEP) * IMG_STEP;
+    return Math.max(IMG_STEP, Math.min(IMG_MAX, w));
+  }
+  function sizedImageUrl(url, cssWidth) {
+    if (!url || typeof url !== 'string') return url;
+    const marker = '/storage/v1/object/public/';
+    const i = url.indexOf(marker);
+    if (i === -1) return url;
+    const base = url.slice(0, i) + '/storage/v1/render/image/public/' + url.slice(i + marker.length);
+    // resize=contain scales the whole photo (the default, cover, crops it).
+    const params = 'width=' + imgWidthFor(cssWidth) + '&quality=' + IMG_QUALITY + '&resize=contain';
+    return base + (base.includes('?') ? '&' : '?') + params;
+  }
+  // Display widths (CSS pixels) for each place a photo appears.
+  const IMG_SIZES = {
+    card: 440,      // property cards and search results
+    thumb: 320,     // gallery thumbnails
+    slide: () => window.innerWidth || 1400,               // full-width carousels and heroes
+    lightbox: () => Math.min(window.innerWidth || 1400, 1600),
+  };
+  function imgSize(kind) { const v = IMG_SIZES[kind]; return typeof v === 'function' ? v() : v; }
+  // An <img> showing a resized photo, falling back to the original.
+  function sizedImgTag(url, kind, attrs) {
+    const sized = sizedImageUrl(url, imgSize(kind));
+    const fallback = sized !== url ? ` data-orig="${escapeHtml(url)}" onerror="if(this.dataset.orig&&this.src!==this.dataset.orig){this.src=this.dataset.orig}"` : '';
+    return `<img src="${escapeHtml(sized)}"${fallback}${attrs ? ' ' + attrs : ''}>`;
+  }
+  // A background-image style for a resized photo; pair with watchBackgrounds().
+  function sizedBgStyle(url, kind) {
+    const sized = sizedImageUrl(url, imgSize(kind));
+    return `background-image:url('${sized.replace(/'/g, "\\'")}')`;
+  }
+  function sizedBgAttrs(url, kind) {
+    if (!url) return '';
+    const sized = sizedImageUrl(url, imgSize(kind));
+    return ` style="${sizedBgStyle(url, kind)}"` + (sized !== url ? ` data-orig-bg="${escapeHtml(url)}"` : '');
+  }
+  // Background photos have no onerror: probe each resized one and fall back.
+  function watchBackgrounds(root) {
+    (root || document).querySelectorAll('[data-orig-bg]').forEach((el) => {
+      // The browser normalises the style to url("..."), whatever quotes we wrote.
+      const m = /url\((['"]?)(.+?)\1\)/.exec(el.style.backgroundImage || '');
+      const sized = m ? m[2].replace(/\\(['"])/g, '$1') : null;
+      if (!sized) return;
+      const probe = new Image();
+      probe.onerror = () => { el.style.backgroundImage = `url('${el.dataset.origBg.replace(/'/g, "\\'")}')`; };
+      probe.src = sized;
+    });
+  }
+
   // ---- Photo fallback -------------------------------------------------
   // A listing with no photos yet (or the API call still loading) gets a
   // plain branded placeholder rather than a broken <img> — real listings
   // will always have a cover_photo_url once photos are uploaded, but a
   // freshly-created one (or test data) may not.
   function thumbHtml(coverUrl, title) {
-    if (coverUrl) return `<img src="${escapeHtml(coverUrl)}" alt="${escapeHtml(title || '')}" loading="lazy">`;
+    if (coverUrl) return sizedImgTag(coverUrl, 'card', `alt="${escapeHtml(title || '')}" loading="lazy"`);
     return `<div class="no-photo">${escapeHtml(CFG.ORG_NAME)}</div>`;
   }
 
@@ -541,8 +718,8 @@
       '</div>';
 
     if (hasImage) {
-      const bgStyle = "background-image:url('" + home.home_hero_image_url.replace(/'/g, "\\'") + "')";
-      mount.innerHTML = '<div class="home-hero" style="' + bgStyle + '"><div class="scrim"></div>' + info + '</div>';
+      mount.innerHTML = '<div class="home-hero"' + sizedBgAttrs(home.home_hero_image_url, 'slide') + '><div class="scrim"></div>' + info + '</div>';
+      watchBackgrounds(mount);
       document.getElementById('home-hero-skip').addEventListener('click', swap);
       swapTimer = setTimeout(swap, IMAGE_SWAP_MS);
       return;
@@ -799,10 +976,10 @@
       }
       mount.innerHTML = photos
         .map((p, i) => {
-          const style = p.url ? `background-image:url('${p.url.replace(/'/g, "\\'")}')` : '';
-          return `<div class="hero-slide${i === 0 ? ' active' : ''}${p.url ? '' : ' hero-caption-fallback'}" style="${style}"></div>`;
+          return `<div class="hero-slide${i === 0 ? ' active' : ''}${p.url ? '' : ' hero-caption-fallback'}"${sizedBgAttrs(p.url, 'slide')}></div>`;
         })
         .join('');
+      watchBackgrounds(mount);
       if (photos.length > 1) {
         let idx = 0;
         setInterval(() => {
@@ -851,7 +1028,7 @@
 
     mount.innerHTML = ordered
       .map((l, i) => {
-        const bg = l.cover_photo_url ? `background-image:url('${l.cover_photo_url.replace(/'/g, "\\'")}')` : '';
+        const bg = sizedBgAttrs(l.cover_photo_url, 'slide');
         const info = `
             <div class="info">
               ${l.is_special_offer_active ? '<span class="offer-flag">Special Offer</span>' : ''}
@@ -861,12 +1038,13 @@
               ${ctaRow(l)}
             </div>`;
         return `
-        <div class="hero-slide${i === 0 ? ' active' : ''}${l.cover_photo_url ? '' : ' hero-caption-fallback'}" style="${bg}">
+        <div class="hero-slide${i === 0 ? ' active' : ''}${l.cover_photo_url ? '' : ' hero-caption-fallback'}"${bg}>
           <div class="scrim"></div>
           ${info}
         </div>`;
       })
       .join('');
+    watchBackgrounds(mount);
 
     if (ordered.length > 1) {
       let idx = 0;
@@ -914,7 +1092,10 @@
   }
   function renderLightboxFrame() {
     const el = document.getElementById('bg-lightbox');
-    el.querySelector('img').src = lightboxUrls[lightboxIndex];
+    const img = el.querySelector('img');
+    const orig = lightboxUrls[lightboxIndex];
+    img.onerror = () => { if (img.src !== orig) img.src = orig; };
+    img.src = sizedImageUrl(orig, imgSize('lightbox'));
     const multi = lightboxUrls.length > 1;
     el.querySelectorAll('.nav').forEach((btn) => { btn.style.display = multi ? 'flex' : 'none'; });
     const countEl = el.querySelector('.lightbox-count');
@@ -932,10 +1113,13 @@
     lightboxIndex = index;
     renderLightboxFrame();
     document.getElementById('bg-lightbox').classList.add('open');
+    // 20/11/2026 (DG): the page behind no longer scrolls while open.
+    document.documentElement.classList.add('bg-noscroll');
   }
   function closeLightbox() {
     const el = document.getElementById('bg-lightbox');
     if (el) el.classList.remove('open');
+    document.documentElement.classList.remove('bg-noscroll');
   }
 
   // opts.showRoomNames (31/08/2026 addition) — the property page's Gallery
@@ -952,7 +1136,7 @@
     return (
       '<div class="gallery-grid">' +
       list.map((p) => {
-        const img = `<img src="${escapeHtml(p.url)}" alt="" loading="lazy" data-lightbox="${escapeHtml(p.url)}">`;
+        const img = sizedImgTag(p.url, 'thumb', `alt="" loading="lazy" data-lightbox="${escapeHtml(p.url)}"`);
         if (!opts.showRoomNames) return img;
         const label = p.room_name ? `<div class="gallery-item-label">${escapeHtml(p.room_name)}</div>` : '';
         return `<div class="gallery-item">${label}${img}</div>`;
@@ -1427,6 +1611,30 @@
       + '<p class="cancel-policy-small">Charges are a percentage of the accommodation price only.</p>';
   }
 
+  // Links to a part of the page already open (20/11/2026, DG): the Mini
+  // menu's "Properties" and "About us" go to index.html#properties, but the
+  // Home page is usually open as "/", which the browser treats as another
+  // page and loads again (every photo with it). A link whose page is the one
+  // open ("/" and "/index.html" are the same) and whose target exists now
+  // just scrolls there; the address keeps the #part for Back and sharing.
+  (function () {
+    const samePage = (path) => path.replace(/\/index\.html$/, '/') === location.pathname.replace(/\/index\.html$/, '/');
+    document.addEventListener('click', (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest && e.target.closest('a[href*="#"]');
+      if (!a || (a.target && a.target !== '_self')) return;
+      let url;
+      try { url = new URL(a.getAttribute('href'), location.href); } catch (err) { return; }
+      if (url.origin !== location.origin || !url.hash || url.search !== location.search || !samePage(url.pathname)) return;
+      let target = null;
+      try { target = document.getElementById(decodeURIComponent(url.hash.slice(1))); } catch (err) { return; }
+      if (!target) return;
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (location.hash !== url.hash) history.pushState(null, '', location.pathname + location.search + url.hash);
+    });
+  })();
+
   window.bg = {
     api,
     renderHeader,
@@ -1446,8 +1654,11 @@
     formatAllowedDays,
     arrivalDepartureNote,
     cancellationPolicyHtml,
+    setWhatsAppMessage,
     metaLine,
     thumbHtml,
+    sizedImageUrl,
+    sizedImgTag,
     cardHtml,
     resultRowHtml,
     truncate,
