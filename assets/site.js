@@ -963,6 +963,11 @@
   // title/CTA overlay at all. About Us is "more personalised, less
   // marketing" per the 29/08/2026 direction, so it deliberately doesn't
   // get the property-card treatment the marketing pages do.
+  // Time each hero picture stays on screen before the next fades in.
+  // Standard for every site: 5 s (DG, 22/11/2026; was 8 s, and 4 s was
+  // tried first on staging). The fade itself is 0.9 s (site.css).
+  const HERO_SLIDE_MS = 5000;
+
   function initHeroSlider(mountId, listings, opts) {
     opts = opts || {};
     const mount = document.getElementById(mountId);
@@ -987,7 +992,7 @@
           slides[idx].classList.remove('active');
           idx = (idx + 1) % slides.length;
           slides[idx].classList.add('active');
-        }, 8000);
+        }, HERO_SLIDE_MS);
       }
       return;
     }
@@ -1053,7 +1058,7 @@
         slides[idx].classList.remove('active');
         idx = (idx + 1) % slides.length;
         slides[idx].classList.add('active');
-      }, 8000);
+      }, HERO_SLIDE_MS);
     }
   }
 
