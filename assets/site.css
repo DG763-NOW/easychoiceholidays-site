@@ -245,6 +245,8 @@ img { max-width: 100%; display: block; }
 }
 .special-offer-box #so-dates { margin: 4px 0 12px; }
 .special-offer-box #so-text { margin: 0 0 14px; white-space: pre-line; }
+/* A property's description keeps its paragraphs (line breaks typed in the CMS), 25/11/2026. */
+#ov-description { white-space: pre-line; }
 .hero-slide .title { font-family: 'Archivo', Arial, sans-serif; font-size: 28px; font-weight: 800; margin: 0 0 4px; }
 .hero-slide .subtitle { font-size: 14px; color: #DCE4FF; margin: 0 0 14px; }
 .hero-slide .desc { max-width: 640px; font-size: 14px; color: #EDF1FF; margin: 0 0 16px; }
